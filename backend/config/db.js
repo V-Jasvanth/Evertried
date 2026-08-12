@@ -11,6 +11,6 @@ const connectDB = async () => {
         console.log("================================");
         process.exit(1);
     }
-};
+}; 
 
 module.exports = connectDB;
