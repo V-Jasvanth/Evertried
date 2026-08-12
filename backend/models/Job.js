@@ -9,7 +9,7 @@ const jobSchema = mongoose.Schema({
     title: {
         type: String,
         required: true
-    },
+    },  
     requiredSkills: [{
         type: String,
         required: true
