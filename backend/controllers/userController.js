@@ -2,114 +2,196 @@ const User = require('../models/User');
 
 // @desc    Update worker skills
 // @route   POST /api/users/update-skills
-// @access  Public (Will be protected later)
+// @access  Protected
 const updateSkills = async (req, res) => {
     try {
-        const { userId, skills } = req.body;
+        // Get user ID from the JWT/auth middleware
+        const userId = req.user._id;
+        const { skills } = req.body;
 
-        if (!userId || !skills) {
-            return res.status(400).json({ message: 'User ID and skills are required' });
+        if (!skills) {
+            return res.status(400).json({
+                message: 'Skills are required'
+            });
         }
 
-        // Must limit to 10 skills based on instructions
+        // Must limit to 10 skills
         if (skills.length > 10) {
-            return res.status(400).json({ message: 'Maximum 10 skills allowed per worker' });
+            return res.status(400).json({
+                message: 'Maximum 10 skills allowed per worker'
+            });
         }
 
         const user = await User.findById(userId);
 
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            return res.status(404).json({
+                message: 'User not found'
+            });
         }
 
         if (user.role !== 'worker') {
-            return res.status(400).json({ message: 'Only workers can update skills' });
+            return res.status(400).json({
+                message: 'Only workers can update skills'
+            });
         }
 
         user.skills = skills;
         await user.save();
 
-        res.json({ message: 'Skills updated successfully', skills: user.skills });
+        res.json({
+            message: 'Skills updated successfully',
+            skills: user.skills
+        });
+
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Server error updating skills' });
+        res.status(500).json({
+            message: 'Server error updating skills'
+        });
     }
 };
 
+
 // @desc    Complete job and update rating
 // @route   POST /api/users/complete-job
-// @access  Public (Will be protected later)
+// @access  Public
 const completeJob = async (req, res) => {
     try {
         const { workerId, rating } = req.body;
 
         if (!workerId || rating === undefined) {
-            return res.status(400).json({ message: 'Worker ID and rating are required' });
+            return res.status(400).json({
+                message: 'Worker ID and rating are required'
+            });
         }
 
         const worker = await User.findById(workerId);
 
         if (!worker) {
-            return res.status(404).json({ message: 'Worker not found' });
+            return res.status(404).json({
+                message: 'Worker not found'
+            });
         }
 
-        // Update average rating using mathematically correct formula
-        worker.rating = ((worker.rating || 0) * (worker.ratingCount || 0) + rating) / ((worker.ratingCount || 0) + 1);
+        // Update average rating
+        worker.rating =
+            ((worker.rating || 0) * (worker.ratingCount || 0) + rating) /
+            ((worker.ratingCount || 0) + 1);
+
         worker.ratingCount = (worker.ratingCount || 0) + 1;
+
         await worker.save();
 
-        res.json({ message: 'Job completed & rating updated', rating: worker.rating });
+        res.json({
+            message: 'Job completed & rating updated',
+            rating: worker.rating
+        });
+
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Server error completing job' });
+        res.status(500).json({
+            message: 'Server error completing job'
+        });
     }
 };
+
 
 // @desc    Update user profile during onboarding
 // @route   PUT /api/user/profile
 // @access  Protected
 const updateProfile = async (req, res) => {
     try {
-        const userId = req.user._id; // Extracted from auth middleware
+        // Get user ID from JWT/auth middleware
+        const userId = req.user._id;
+
         const {
-            name, role, primarySkill, secondarySkills, wageExpectation, workRadius,
-            employerType, locationCoordinates, locationName, availability
+            name,
+            role,
+            primarySkill,
+            secondarySkills,
+            wageExpectation,
+            workRadius,
+            employerType,
+            locationCoordinates,
+            locationName,
+            availability
         } = req.body;
 
         const user = await User.findById(userId);
-        if(!user) return res.status(404).json({ message: 'User not found' });
 
-        if(name) user.name = name;
-        if(role && user.role === 'pending') user.role = role;
-        
-        if(user.role === 'worker') {
-            if(primarySkill) user.primarySkill = primarySkill;
-            if(secondarySkills) user.secondarySkills = secondarySkills;
-            if(wageExpectation) user.wageExpectation = wageExpectation;
-            if(workRadius) user.workRadius = workRadius;
-        } else if(user.role === 'employer') {
-            if(employerType) user.employerType = employerType;
+        if (!user) {
+            return res.status(404).json({
+                message: 'User not found'
+            });
         }
 
-        if(locationCoordinates) {
-            user.location = { type: 'Point', coordinates: locationCoordinates };
+        if (name) {
+            user.name = name;
         }
-        if(locationName) user.locationName = locationName;
-        if(availability !== undefined) user.availability = availability;
 
-        user.profileCompleted = true; // Mark onboarding as done!
-        
+        if (role && user.role === 'pending') {
+            user.role = role;
+        }
+
+        if (user.role === 'worker') {
+            if (primarySkill) {
+                user.primarySkill = primarySkill;
+            }
+
+            if (secondarySkills) {
+                user.secondarySkills = secondarySkills;
+            }
+
+            if (wageExpectation) {
+                user.wageExpectation = wageExpectation;
+            }
+
+            if (workRadius) {
+                user.workRadius = workRadius;
+            }
+        } else if (user.role === 'employer') {
+            if (employerType) {
+                user.employerType = employerType;
+            }
+        }
+
+        if (locationCoordinates) {
+            user.location = {
+                type: 'Point',
+                coordinates: locationCoordinates
+            };
+        }
+
+        if (locationName) {
+            user.locationName = locationName;
+        }
+
+        if (availability !== undefined) {
+            user.availability = availability;
+        }
+
+        // Mark onboarding as completed
+        user.profileCompleted = true;
+
         await user.save();
 
         res.json({
-            _id: user._id, name: user.name, email: user.email, role: user.role,
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
             profileCompleted: user.profileCompleted
         });
-    } catch(error) {
+
+    } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Server error updating profile' });
+        res.status(500).json({
+            message: 'Server error updating profile'
+        });
     }
 };
+
 
 // @desc    Create Digital Signature
 // @route   POST /api/user/create-signature
@@ -117,16 +199,32 @@ const updateProfile = async (req, res) => {
 const createSignature = async (req, res) => {
     try {
         const { fullName } = req.body;
-        if (!fullName) return res.status(400).json({ message: 'Full name is required' });
+
+        if (!fullName) {
+            return res.status(400).json({
+                message: 'Full name is required'
+            });
+        }
 
         const userId = req.user._id;
+
         const user = await User.findById(userId);
 
-        if (!user) return res.status(404).json({ message: 'User not found' });
+        if (!user) {
+            return res.status(404).json({
+                message: 'User not found'
+            });
+        }
 
         const timestamp = new Date();
+
         const crypto = require('crypto');
-        const hashId = crypto.createHash('sha256').update(`${userId}-${fullName}-${timestamp.getTime()}`).digest('hex').substring(0, 16);
+
+        const hashId = crypto
+            .createHash('sha256')
+            .update(`${userId}-${fullName}-${timestamp.getTime()}`)
+            .digest('hex')
+            .substring(0, 16);
 
         user.signature = {
             signedBy: fullName,
@@ -136,12 +234,19 @@ const createSignature = async (req, res) => {
 
         await user.save();
 
-        res.json({ message: 'Signature created successfully', signature: user.signature });
+        res.json({
+            message: 'Signature created successfully',
+            signature: user.signature
+        });
+
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Server error creating signature' });
+        res.status(500).json({
+            message: 'Server error creating signature'
+        });
     }
 };
+
 
 // @desc    Get Digital Signature
 // @route   GET /api/user/get-signature
@@ -149,34 +254,59 @@ const createSignature = async (req, res) => {
 const getSignature = async (req, res) => {
     try {
         const userId = req.user._id;
+
         const user = await User.findById(userId);
 
-        if (!user) return res.status(404).json({ message: 'User not found' });
-
-        if (!user.signature || !user.signature.hashId) {
-            return res.status(404).json({ message: 'Signature not found' });
+        if (!user) {
+            return res.status(404).json({
+                message: 'User not found'
+            });
         }
 
-        res.json({ signature: user.signature });
+        if (!user.signature || !user.signature.hashId) {
+            return res.status(404).json({
+                message: 'Signature not found'
+            });
+        }
+
+        res.json({
+            signature: user.signature
+        });
+
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Server error retrieving signature' });
+        res.status(500).json({
+            message: 'Server error retrieving signature'
+        });
     }
 };
+
 
 // @desc    Get user profile details
 // @route   GET /api/user/profile
 // @access  Protected
 const getProfile = async (req, res) => {
     try {
-        const user = await User.findById(req.user._id).select('-password');
-        if (!user) return res.status(404).json({ message: 'User not found' });
+        const user = await User
+            .findById(req.user._id)
+            .select('-password');
+
+        if (!user) {
+            return res.status(404).json({
+                message: 'User not found'
+            });
+        }
+
         res.json(user);
+
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Server error retrieving profile' });
+        res.status(500).json({
+            message: 'Server error retrieving profile'
+        });
     }
 };
+
 
 module.exports = {
     updateSkills,
