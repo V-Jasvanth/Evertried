@@ -32,14 +32,19 @@ const getWorkerDashboard = async (req, res) => {
         // Nearby jobs (Placeholder without strict geospatial for MVP)
         const nearbyJobs = await Job.find({ status: 'open' }).sort({ createdAt: -1 }).limit(10);
 
-        res.json({
-            user: { name: user.name, rating: user.rating, jobsCompleted: user.ratingCount }, // simplified stats
-            activeJob,
-            activeContract,
-            earningsPotential,
-            nearbyJobs, // static fetch (real-time is handled via socket)
-            myApplications
-        });
+res.json({
+    user: {
+        name: user.name,
+        rating: user.rating,
+        jobsCompleted: user.ratingCount,
+        skills: user.skills || []
+    },
+    activeJob,
+    activeContract,
+    earningsPotential,
+    nearbyJobs,
+    myApplications
+});
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error fetching worker dashboard' });
