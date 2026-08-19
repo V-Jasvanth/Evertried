@@ -20,7 +20,7 @@ const DigitalSignature = () => {
                 if (data.signature) {
                     setSignature(data.signature);
                 }
-            } catch (error) {
+            } catch {
                 console.log('No existing signature found');
             }
         };

@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { Briefcase, Users, Plus, CheckCircle, TrendingUp, AlertCircle, XCircle, Sparkles } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import axios from 'axios';
@@ -7,7 +7,7 @@ import ContractViewer from '../components/ContractViewer';
 
 const EmployerDashboard = () => {
     const { user } = useContext(AuthContext);
-    const [socket, setSocket] = useState(null);
+    const socketRef = useRef(null);
     const [data, setData] = useState({ activeJobs: [], insights: {}, suggestions: [] });
     const [activeContractId, setActiveContractId] = useState(null);
     
@@ -20,35 +20,54 @@ const EmployerDashboard = () => {
     
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-    const fetchDashboard = async () => {
-        try {
-            const config = { headers: { Authorization: `Bearer ${user.token}` } };
-            const res = await axios.get(`${API_URL}/api/dashboard/employer`, config);
-            setData(res.data);
-        } catch (error) {
-            console.error('Failed to load employer dashboard', error);
-        }
+const fetchDashboard = useCallback(async () => {
+    if (!user?.token) return;
+
+    try {
+        const config = {
+            headers: {
+                Authorization: `Bearer ${user.token}`
+            }
+        };
+
+        const res = await axios.get(
+            `${API_URL}/api/dashboard/employer`,
+            config
+        );
+
+        setData(res.data);
+    } catch (error) {
+        console.error('Failed to load employer dashboard', error);
+    }
+}, [user, API_URL]);
+
+useEffect(() => {
+    if (!user?.token) return;
+
+    const loadDashboard = () => {
+        fetchDashboard();
     };
 
-    useEffect(() => {
-        if (!user) return;
+    const initialLoad = setTimeout(loadDashboard, 0);
+
+    const newSocket = io(API_URL);
+    socketRef.current = newSocket;
+
+    newSocket.on('connect', () => {
+        newSocket.emit('register', user._id);
+    });
+
+    // Listen for new workers applying immediately
+    newSocket.on('worker_applied', () => {
         fetchDashboard();
-        
-        const newSocket = io(API_URL);
-        setSocket(newSocket);
+    });
 
-        newSocket.on('connect', () => {
-            newSocket.emit('register', user._id);
-        });
-
-        // Listen for new workers applying immediately
-        newSocket.on('worker_applied', (applicationData) => {
-            fetchDashboard(); // Re-fetch to update incoming applications
-        });
-
-        return () => newSocket.close();
-    }, [user, API_URL]);
-
+    return () => {
+        clearTimeout(initialLoad);
+        newSocket.close();
+        socketRef.current = null;
+    };
+}, [user, API_URL, fetchDashboard]);
     const handleCreateJob = async (e) => {
         e.preventDefault();
         try {
@@ -75,10 +94,14 @@ const EmployerDashboard = () => {
 
     const handleSelectWorker = async (jobId, workerId, status) => {
         try {
-            if (socket) {
-                socket.emit('job_select', { jobId, workerId, status, title: 'Active Job' });
-            }
-
+if (socketRef.current) {
+    socketRef.current.emit('job_select', {
+        jobId,
+        workerId,
+        status,
+        title: 'Active Job'
+    });
+}
             if (status === 'hired') {
                 // Automatically generate the digital contract
                 const config = { headers: { Authorization: `Bearer ${user.token}` } };

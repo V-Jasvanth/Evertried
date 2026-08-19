@@ -1,28 +1,29 @@
-import { createContext, useState, useEffect } from 'react';
+import { createContext, useState } from 'react';
 import axios from 'axios';
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
+    const [user, setUser] = useState(() => {
+        const storedUser = localStorage.getItem('user');
+
+        if (!storedUser) {
+            return null;
+        }
+
+        try {
+            return JSON.parse(storedUser);
+        } catch (error) {
+            console.error('Invalid stored user data:', error);
+            localStorage.removeItem('user');
+            return null;
+        }
+    });
 
     const API_URL = (
         import.meta.env.VITE_API_URL || 'http://localhost:5000'
     ).replace(/\/$/, '');
-
-    // Restore logged-in user when the app starts
-    useEffect(() => {
-        const storedUser = localStorage.getItem('user');
-
-        if (storedUser) {
-            try {
-                setUser(JSON.parse(storedUser));
-            } catch (error) {
-                console.error('Invalid stored user data:', error);
-                localStorage.removeItem('user');
-            }
-        }
-    }, []);
 
     // Get authorization headers for protected APIs
     const getAuthConfig = () => {

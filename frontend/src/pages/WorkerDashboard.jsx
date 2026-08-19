@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect, useRef } from 'react';
 import {
     Plus,
     Trash2,
@@ -35,18 +35,27 @@ const WorkerDashboard = () => {
     const [aiMessage, setAiMessage] = useState('');
 
     const [jobs, setJobs] = useState([]);
-    const [socket, setSocket] = useState(null);
+
+    // Socket connection is kept in a ref instead of state
+    const socketRef = useRef(null);
+
     const [dashboardData, setDashboardData] = useState({
         earningsPotential: 4200,
         user: {}
     });
+
     const [activeContractId, setActiveContractId] = useState(null);
 
-    const API_URL =
-        import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const API_URL = (
+        import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    ).replace(/\/$/, '');
+
+    // -----------------------------
+    // DASHBOARD + SOCKET CONNECTION
+    // -----------------------------
 
     useEffect(() => {
-        if (!user) return;
+        if (!user?.token) return;
 
         const fetchDash = async () => {
             try {
@@ -68,24 +77,38 @@ const WorkerDashboard = () => {
                     setSkills(res.data.user.skills);
                 }
 
-                // Load nearby jobs
-                if (res.data.nearbyJobs && jobs.length === 0) {
-                    setJobs(
-                        res.data.nearbyJobs.map((j) => ({
+                // Load nearby jobs only when the current job list is empty.
+                // Using the functional state form avoids reading jobs.length
+                // inside this effect.
+                if (res.data.nearbyJobs) {
+                    setJobs((prevJobs) => {
+                        if (prevJobs.length > 0) {
+                            return prevJobs;
+                        }
+
+                        return res.data.nearbyJobs.map((j) => ({
                             ...j,
                             id: j._id
-                        }))
-                    );
+                        }));
+                    });
                 }
             } catch (err) {
-                console.error('Error fetching worker dashboard:', err);
+                console.error(
+                    'Error fetching worker dashboard:',
+                    err
+                );
             }
         };
 
-        fetchDash();
+        // Delay initial fetch to avoid synchronous state updates
+        // directly inside the effect.
+        const initialFetch = setTimeout(() => {
+            fetchDash();
+        }, 0);
 
+        // Create Socket.IO connection
         const newSocket = io(API_URL);
-        setSocket(newSocket);
+        socketRef.current = newSocket;
 
         newSocket.on('connect', () => {
             newSocket.emit('register', user._id);
@@ -113,11 +136,20 @@ const WorkerDashboard = () => {
             }
         });
 
-        return () => newSocket.close();
+        return () => {
+            clearTimeout(initialFetch);
+
+            newSocket.close();
+
+            socketRef.current = null;
+        };
     }, [user, API_URL]);
 
+    // -----------------------------
+    // GEMINI VOICE PROFILE
+    // -----------------------------
+
     const handleGeminiVoiceProfile = async () => {
-        // Step 1: Initialize Browser Native Web Speech API
         const SpeechRecognition =
             window.SpeechRecognition ||
             window.webkitSpeechRecognition;
@@ -146,7 +178,6 @@ const WorkerDashboard = () => {
 
             setAiMessage(`Heard: "${transcript}"`);
 
-            // Step 2: Send transcribed text to secure backend API
             setTimeout(async () => {
                 try {
                     setAiMessage('AI processing... Please wait.');
@@ -211,6 +242,10 @@ const WorkerDashboard = () => {
         };
     };
 
+    // -----------------------------
+    // SKILLS
+    // -----------------------------
+
     const handleAddSkill = (e) => {
         e.preventDefault();
 
@@ -242,6 +277,10 @@ const WorkerDashboard = () => {
         );
     };
 
+    // -----------------------------
+    // JOB APPLICATION
+    // -----------------------------
+
     const handleApply = (jobId, employerId) => {
         // Optimistic UI update
         setJobs(
@@ -252,16 +291,16 @@ const WorkerDashboard = () => {
             )
         );
 
-        // Use full application payload matching backend expectation
-        if (socket) {
-            socket.emit('job_apply', {
-                jobId: jobId,
+        // Use the Socket.IO ref
+        if (socketRef.current) {
+            socketRef.current.emit('job_apply', {
+                jobId,
                 workerId: user._id,
-                employerId: employerId,
+                employerId,
                 name: user.name,
                 rating: user.rating,
                 distance: '1.2 km',
-                skills: skills
+                skills
             });
         }
     };
@@ -605,6 +644,7 @@ const WorkerDashboard = () => {
                                 0,
                                 totalSlots - filledSlots
                             );
+
                             const isFull =
                                 job.status === 'in-progress' ||
                                 openSlots === 0;
@@ -629,6 +669,7 @@ const WorkerDashboard = () => {
 
                                                 <span className="text-slate-600 text-xs font-bold flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                                                     <MapPin className="w-3.5 h-3.5 text-brand-DEFAULT" />
+
                                                     {job.location &&
                                                     typeof job.location === 'string'
                                                         ? job.location
