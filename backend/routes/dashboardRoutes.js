@@ -11,4 +11,4 @@ router.get('/worker', protect, getWorkerDashboard);
 router.get('/employer', protect, getEmployerDashboard);
 router.get('/coordinator', protect, getCoordinatorDashboard);
 
-module.exports = router;
+module.exports = router; 
