@@ -26,7 +26,7 @@ const extractVoiceSkills = async (req, res) => {
         Worker's Spoken Text: "${transcript}"`;
 
         const response = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
             { contents: [{ parts: [{ text: prompt }] }] },
             { headers: { 'Content-Type': 'application/json' } }
         );

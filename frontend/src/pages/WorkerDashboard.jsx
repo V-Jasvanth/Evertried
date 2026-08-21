@@ -182,10 +182,16 @@ const WorkerDashboard = () => {
                 try {
                     setAiMessage('AI processing... Please wait.');
 
-                    const res = await axios.post(
-                        `${API_URL}/api/gemini/extract-skills`,
-                        { transcript }
-                    );
+                   const response = await axios.post(
+    `${API_URL}/api/gemini/extract-skills`,
+    { transcript },
+    {
+        headers: {
+            Authorization: `Bearer ${user.token}`,
+            'Content-Type': 'application/json'
+        }
+    }
+);
 
                     const extractedSkills = res.data.skills;
 
