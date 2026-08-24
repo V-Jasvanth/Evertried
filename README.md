@@ -18,6 +18,9 @@ EverTried is a platform designed to connect employers with workers for flexible 
 - Added user and job APIs
 - Added dashboard APIs
 - Added Socket.IO for real-time communication
+### AI Voice Profiling
+
+EverTried includes AI-powered voice profiling that extracts worker skills and experience from spoken input.
 
 ### Dashboards
 - Worker Dashboard
