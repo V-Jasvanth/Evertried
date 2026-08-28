@@ -21,7 +21,7 @@ EverTried is a platform designed to connect employers with workers for flexible 
 ### AI Voice Profiling
 
 EverTried includes AI-powered voice profiling that extracts worker skills and experience from spoken input.
-
+- Improved AI skill extraction and validation for worker voice profiles.
 ### Dashboards
 - Worker Dashboard
 - Employer Dashboard
