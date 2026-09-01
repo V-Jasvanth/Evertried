@@ -193,7 +193,7 @@ const WorkerDashboard = () => {
     }
 );
 
-                    const extractedSkills = res.data.skills;
+                    const extractedSkills = response.data.skills;
 
                     if (
                         Array.isArray(extractedSkills) &&
