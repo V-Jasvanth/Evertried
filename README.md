@@ -54,3 +54,5 @@ The core authentication, database connection, dashboard workflows, and OTP login
 - JWT
 - Nodemailer
 - Tailwind CSS
+### Recent Update
+- Improved worker AI voice profiling and Gemini skill extraction handling.
