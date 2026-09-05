@@ -21,7 +21,7 @@ import DigitalSignature from '../components/DigitalSignature';
 import ContractViewer from '../components/ContractViewer';
 
 const WorkerDashboard = () => {
-    const { user } = useContext(AuthContext);
+    const { user, updateSkills } = useContext(AuthContext);
 
     // Skills are now loaded from MongoDB
     const [skills, setSkills] = useState([]);
@@ -49,6 +49,18 @@ const WorkerDashboard = () => {
     const API_URL = (
         import.meta.env.VITE_API_URL || 'http://localhost:5000'
     ).replace(/\/$/, '');
+
+    // Persist skills to MongoDB and update state
+    const saveAndSetSkills = async (updatedSkills) => {
+        setSkills(updatedSkills);
+        if (updateSkills) {
+            try {
+                await updateSkills(updatedSkills);
+            } catch (err) {
+                console.error('Failed to persist skills to backend:', err);
+            }
+        }
+    };
 
     // -----------------------------
     // DASHBOARD + SOCKET CONNECTION
@@ -199,14 +211,20 @@ const WorkerDashboard = () => {
                         Array.isArray(extractedSkills) &&
                         extractedSkills.length > 0
                     ) {
-                        setSkills((prev) => [
-                            ...prev,
-                            ...extractedSkills
-                        ]);
+                        const existingNames = new Set(skills.map(s => s.name.toLowerCase()));
+                        const uniqueExtracted = extractedSkills.filter(s => !existingNames.has(s.name.toLowerCase()));
 
-                        setAiMessage(
-                            `Success! Extracted ${extractedSkills.length} skill(s).`
-                        );
+                        if (uniqueExtracted.length > 0) {
+                            const combined = [...skills, ...uniqueExtracted].slice(0, 10);
+                            await saveAndSetSkills(combined);
+                            setAiMessage(
+                                `Success! Saved ${uniqueExtracted.length} new skill(s) to portfolio.`
+                            );
+                        } else {
+                            setAiMessage(
+                                'Extracted skill(s) already present in portfolio.'
+                            );
+                        }
                     } else {
                         setAiMessage(
                             'Could not detect specific skills. Try again!'
@@ -220,14 +238,13 @@ const WorkerDashboard = () => {
                 } catch (err) {
                     console.error('Backend Error:', err);
 
-                    setAiMessage(
-                        'Error processing transcript.'
-                    );
+                    const errMsg = err.response?.data?.message || 'Error processing transcript.';
+                    setAiMessage(errMsg);
 
                     setTimeout(() => {
                         setIsListeningAI(false);
                         setAiMessage('');
-                    }, 3000);
+                    }, 3500);
                 }
             }, 1000);
         };
@@ -252,35 +269,41 @@ const WorkerDashboard = () => {
     // SKILLS
     // -----------------------------
 
-    const handleAddSkill = (e) => {
+    const handleAddSkill = async (e) => {
         e.preventDefault();
 
         if (skills.length >= 10) {
             return alert('Maximum 10 skills allowed');
         }
 
-        if (!newSkillName.trim() || !newSkillExp) {
+        const trimmedName = newSkillName.trim();
+        if (!trimmedName || !newSkillExp) {
             return;
         }
 
-        setSkills([
+        if (skills.some(s => s.name.toLowerCase() === trimmedName.toLowerCase())) {
+            alert('This skill is already in your portfolio');
+            return;
+        }
+
+        const updated = [
             ...skills,
             {
-                name: newSkillName,
+                name: trimmedName,
                 experience: Number(newSkillExp)
             }
-        ]);
+        ];
 
         setNewSkillName('');
         setNewSkillExp('');
+        await saveAndSetSkills(updated);
     };
 
-    const removeSkill = (indexToRemove) => {
-        setSkills(
-            skills.filter(
-                (_, idx) => idx !== indexToRemove
-            )
+    const removeSkill = async (indexToRemove) => {
+        const updated = skills.filter(
+            (_, idx) => idx !== indexToRemove
         );
+        await saveAndSetSkills(updated);
     };
 
     // -----------------------------

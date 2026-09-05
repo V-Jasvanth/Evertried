@@ -92,16 +92,16 @@ useEffect(() => {
         }
     };
 
-    const handleSelectWorker = async (jobId, workerId, status) => {
+    const handleSelectWorker = async (jobId, workerId, status, jobTitle) => {
         try {
-if (socketRef.current) {
-    socketRef.current.emit('job_select', {
-        jobId,
-        workerId,
-        status,
-        title: 'Active Job'
-    });
-}
+            if (socketRef.current) {
+                socketRef.current.emit('job_select', {
+                    jobId,
+                    workerId,
+                    status,
+                    title: jobTitle || 'Active Job'
+                });
+            }
             if (status === 'hired') {
                 // Automatically generate the digital contract
                 const config = { headers: { Authorization: `Bearer ${user.token}` } };
@@ -300,13 +300,13 @@ if (socketRef.current) {
                                                         ) : (
                                                             <div className="flex gap-2">
                                                                 <button
-                                                                    onClick={() => handleSelectWorker(job._id, app.worker?._id, 'hired')}
+                                                                    onClick={() => handleSelectWorker(job._id, app.worker?._id, 'hired', job.title)}
                                                                     className="bg-green-500 text-white p-2 px-4 rounded-xl font-bold flex items-center gap-1 hover:bg-green-600 shadow-sm shadow-green-200 active:scale-95 transition-all"
                                                                 >
                                                                     <CheckCircle className="w-4 h-4"/> Hire
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => handleSelectWorker(job._id, app.worker?._id, 'rejected')}
+                                                                    onClick={() => handleSelectWorker(job._id, app.worker?._id, 'rejected', job.title)}
                                                                     className="bg-white border-2 border-slate-200 text-slate-400 p-2 px-4 rounded-xl font-bold flex items-center gap-1 hover:bg-red-50 hover:text-red-500 hover:border-red-200 active:scale-95 transition-all"
                                                                 >
                                                                     <XCircle className="w-4 h-4"/> Reject

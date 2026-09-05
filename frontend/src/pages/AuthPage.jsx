@@ -38,7 +38,7 @@ const AuthPage = () => {
         try {
             const data = await verifyOtp(email, otp, isLogin ? undefined : name, role);
             if (data.role === 'worker') navigate('/worker');
-            else if (data.role === 'coordinator') navigate('/'); 
+            else if (data.role === 'coordinator') navigate('/coordinator'); 
             else navigate('/employer');
         } catch (err) {
             setError(err.response?.data?.message || 'Invalid OTP. Please try again.');
@@ -57,6 +57,7 @@ const AuthPage = () => {
 
             const data = await googleAuthLogin(displayName, googleEmail, role);
             if (data.role === 'worker') navigate('/worker');
+            else if (data.role === 'coordinator') navigate('/coordinator');
             else navigate('/employer');
             
         } catch (err) {

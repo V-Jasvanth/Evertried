@@ -4,8 +4,8 @@ const { updateSkills, completeJob, updateProfile, getProfile, createSignature, g
 const { protect } = require('../middleware/authMiddleware');
 
 // Define routes
-router.post('/update-skills', protect, updateSkills); // Should be protected later
-router.post('/complete-job', completeJob);
+router.post('/update-skills', protect, updateSkills);
+router.post('/complete-job', protect, completeJob);
 router.put('/profile', protect, updateProfile);
 router.get('/profile', protect, getProfile);
 

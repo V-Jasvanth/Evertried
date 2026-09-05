@@ -11,7 +11,7 @@ const extractVoiceSkills = async (req, res) => {
             });
         }
 
-        // Get Gemini API key
+        // Get Gemini API key & model
         const apiKey = process.env.GEMINI_API_KEY;
 
         if (!apiKey || apiKey === 'your_gemini_api_key_here') {
@@ -19,6 +19,8 @@ const extractVoiceSkills = async (req, res) => {
                 message: 'GEMINI_API_KEY is not configured on the backend.'
             });
         }
+
+        const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
         // Prompt for Gemini
         const prompt = `
@@ -64,7 +66,7 @@ Worker's Spoken Text:
 
         // Gemini API endpoint
         const url =
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
         // Send request to Gemini
         const response = await axios.post(
@@ -165,13 +167,14 @@ Worker's Spoken Text:
         });
 
     } catch (error) {
+        const errorDetail = error.response?.data?.error?.message || error.response?.data?.message || error.message;
         console.error(
             'Backend Gemini Error:',
-            error.response?.data || error.message
+            errorDetail
         );
 
         return res.status(500).json({
-            message: 'Server error processing AI skills'
+            message: `Gemini API Error: ${errorDetail}`
         });
     }
 };
