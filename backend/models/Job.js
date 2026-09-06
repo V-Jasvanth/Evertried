@@ -55,10 +55,7 @@ const jobSchema = mongoose.Schema({
 }, {
     timestamps: true
 });
-
 // Index location for finding nearby jobs
 jobSchema.index({ location: '2dsphere' });
-
 const Job = mongoose.model('Job', jobSchema);
-
 module.exports = Job;
