@@ -4,9 +4,13 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 
 const generateToken = (id) => {
+    if (!process.env.JWT_SECRET) {
+        throw new Error('JWT_SECRET environment variable is missing');
+    }
+
     return jwt.sign(
         { id },
-        process.env.JWT_SECRET || 'secret123',
+        process.env.JWT_SECRET,
         { expiresIn: '30d' }
     );
 };

@@ -1,231 +1,132 @@
-const axios = require('axios');
+import { useState, useContext, useEffect } from 'react';
+import { User, Mail, ShieldCheck, Star, Briefcase, Settings } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
+import axios from 'axios';
+import DigitalSignature from '../components/DigitalSignature';
 
-const extractVoiceSkills = async (req, res) => {
-    try {
-        const { transcript } = req.body;
+const ProfilePage = () => {
+    const { user } = useContext(AuthContext);
+    const [profileData, setProfileData] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-        if (!transcript || typeof transcript !== 'string' || !transcript.trim()) {
-            return res.status(400).json({
-                message: 'Transcript is required'
-            });
-        }
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-        // Gemini API configuration
-        const apiKey = process.env.GEMINI_API_KEY;
-        const modelName =
-            process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-
-        if (!apiKey || apiKey === 'your_gemini_api_key_here') {
-            return res.status(500).json({
-                message: 'GEMINI_API_KEY is not configured on the backend.'
-            });
-        }
-
-        const prompt = `
-You are an AI assistant for a local worker job platform called EverTried.
-
-Extract the worker's skills and years of experience from the following spoken text.
-
-Return ONLY a valid JSON array.
-
-Each object must contain:
-- "name": string in Title Case
-- "experience": integer representing years of experience
-
-Rules:
-1. If experience is not mentioned for a skill, use 1.
-2. Do not include skills that are not clearly mentioned.
-3. Do not invent skills.
-4. If no clear skills are detected, return [].
-5. Experience must be a positive integer.
-6. Do not include markdown.
-7. Do not include explanations.
-8. Return ONLY the JSON array.
-
-Example:
-
-Spoken:
-"I am an electrician for five years and also a painter"
-
-Response:
-[
-    {"name": "Electrician", "experience": 5},
-    {"name": "Painter", "experience": 1}
-]
-
-Worker's Spoken Text:
-"${transcript.trim()}"
-`;
-
-        // Gemini API endpoint
-        const url =
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-
-        const response = await axios.post(
-            url,
-            {
-                contents: [
-                    {
-                        parts: [
-                            {
-                                text: prompt
-                            }
-                        ]
-                    }
-                ],
-                generationConfig: {
-                    temperature: 0.2,
-                    responseMimeType: 'application/json'
-                }
-            },
-            {
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                timeout: 30000
-            }
-        );
-
-        // Safely extract Gemini response
-        const aiText =
-            response?.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (!aiText) {
-            console.error(
-                'Gemini returned an empty response:',
-                response?.data
-            );
-
-            return res.status(502).json({
-                message: 'Gemini returned an empty response.'
-            });
-        }
-
-        // Remove accidental markdown code fences if Gemini returns them
-        const cleanText = aiText
-            .replace(/```json/gi, '')
-            .replace(/```/g, '')
-            .trim();
-
-        let extractedSkills;
-
-        try {
-            extractedSkills = JSON.parse(cleanText);
-        } catch (parseError) {
-            console.error(
-                'Failed to parse Gemini JSON:',
-                cleanText
-            );
-
-            // Fallback: find the JSON array inside the response
-            const match = cleanText.match(/\[[\s\S]*\]/);
-
-            if (!match) {
-                return res.status(502).json({
-                    message: 'Gemini returned invalid JSON.'
-                });
-            }
-
+    useEffect(() => {
+        if (!user) return;
+        const fetchProfile = async () => {
             try {
-                extractedSkills = JSON.parse(match[0]);
-            } catch (fallbackError) {
-                console.error(
-                    'Fallback JSON parsing failed:',
-                    fallbackError.message
-                );
-
-                return res.status(502).json({
-                    message: 'Gemini returned invalid skills data.'
-                });
+                const config = { headers: { Authorization: `Bearer ${user.token}` } };
+                const { data } = await axios.get(`${API_URL}/api/user/profile`, config);
+                setProfileData(data);
+            } catch (error) {
+                console.error("Failed to load profile", error);
+            } finally {
+                setLoading(false);
             }
-        }
+        };
+        fetchProfile();
+    }, [user, API_URL]);
 
-        // Ensure Gemini returned an array
-        if (!Array.isArray(extractedSkills)) {
-            return res.status(502).json({
-                message: 'Gemini returned an invalid skills format.'
-            });
-        }
+    if (!user) return null;
 
-        // Validate and normalize the extracted skills
-        extractedSkills = extractedSkills
-            .filter(
-                (skill) =>
-                    skill &&
-                    typeof skill.name === 'string' &&
-                    skill.name.trim().length > 0
-            )
-            .map((skill) => {
-                let experience = Number(skill.experience);
-
-                if (
-                    !Number.isFinite(experience) ||
-                    experience < 1
-                ) {
-                    experience = 1;
-                }
-
-                experience = Math.round(experience);
-
-                // Convert skill name to Title Case
-                const name = skill.name
-                    .trim()
-                    .toLowerCase()
-                    .replace(/\b\w/g, (char) => char.toUpperCase());
-
-                return {
-                    name,
-                    experience
-                };
-            });
-
-        // Remove duplicate skills
-        const uniqueSkills = [];
-        const seenSkills = new Set();
-
-        for (const skill of extractedSkills) {
-            const key = skill.name.toLowerCase();
-
-            if (!seenSkills.has(key)) {
-                seenSkills.add(key);
-                uniqueSkills.push(skill);
-            }
-        }
-
-        return res.json({
-            skills: uniqueSkills
-        });
-
-    } catch (error) {
-        console.error(
-            'Backend Gemini Error:',
-            error.response?.data || error.message
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-64 text-brand-DEFAULT">
+                <div className="w-8 h-8 border-4 border-slate-200 border-t-brand-DEFAULT rounded-full animate-spin"></div>
+            </div>
         );
-
-        // Gemini/API error
-        if (error.response) {
-            const statusCode = error.response.status || 500;
-
-            return res.status(statusCode >= 400 ? statusCode : 500).json({
-                message:
-                    error.response?.data?.error?.message ||
-                    'Gemini API request failed.'
-            });
-        }
-
-        // Timeout / network error
-        if (error.code === 'ECONNABORTED') {
-            return res.status(504).json({
-                message: 'Gemini request timed out.'
-            });
-        }
-
-        return res.status(500).json({
-            message: 'Server error processing AI skills.'
-        });
     }
+
+    return (
+        <div className="max-w-7xl mx-auto px-4 py-12 w-full flex flex-col md:flex-row gap-8">
+
+            {/* Left Column: General Info */}
+            <div className="flex-1 space-y-6">
+                <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-6 opacity-5"><User className="w-32 h-32" /></div>
+
+                    <div className="flex items-center gap-6 mb-8 relative z-10">
+                        <div className="w-24 h-24 bg-brand-light text-brand-dark rounded-full flex justify-center items-center text-4xl font-black shadow-inner border border-brand-DEFAULT/20">
+                            {(profileData?.name || user?.name)?.[0]?.toUpperCase() || 'U'}
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-black text-slate-900">{profileData?.name || user?.name || 'Worker Name'}</h1>
+                            <span className="inline-flex items-center gap-1.5 bg-brand-DEFAULT text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mt-2">
+                                <ShieldCheck className="w-3.5 h-3.5" /> {profileData?.role || user?.role}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4 relative z-10">
+                        <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-400 shadow-sm"><Mail className="w-5 h-5"/></div>
+                            <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Registered Email</p>
+                                <p className="text-slate-800 font-medium">{profileData?.email || user?.email || 'No email securely attached'}</p>
+                            </div>
+                        </div>
+
+                        {profileData?.role === 'worker' && (
+                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-yellow-500 shadow-sm"><Star className="w-5 h-5 fill-current"/></div>
+                                <div className="flex-1">
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Overall Rating</p>
+                                    <div className="flex justify-between items-center">
+                                        <p className="text-slate-800 font-medium">{profileData?.rating || 0}/5.0</p>
+                                        <span className="text-xs text-slate-500 font-bold bg-white px-2 py-0.5 rounded shadow-sm border border-slate-200">
+                                            {profileData?.ratingCount || 0} Reviews
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {profileData?.role === 'employer' && (
+                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-400 shadow-sm"><Briefcase className="w-5 h-5"/></div>
+                                <div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Account Structure</p>
+                                    <p className="text-slate-800 font-medium">{profileData?.employerType || 'Standard Employer'}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {(profileData?.primarySkill || (profileData?.skills && profileData.skills.length > 0)) && (
+                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-brand-DEFAULT shadow-sm"><Settings className="w-5 h-5"/></div>
+                                <div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Active Skills Profile</p>
+                                    <p className="text-slate-800 font-medium font-bold">
+                                         {profileData?.primarySkill} {profileData?.skills?.length ? `+ ${profileData.skills.length} verified manual skills` : ''}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                    </div>
+                </div>
+            </div>
+
+            {/* Right Column: Signature / Trust Assets */}
+            <div className="flex-1 space-y-6">
+                <div>
+                    <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">Legal Identity Verification</h2>
+                    <DigitalSignature />
+                </div>
+
+                <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-8 border border-slate-700 shadow-lg text-white">
+                    <h3 className="text-lg font-bold mb-2">EverTried Trust Guarantee</h3>
+                    <p className="text-slate-400 text-sm leading-relaxed mb-4">
+                        Your digital signature is permanently bonded to your Account ID. It acts as a legally binding handshake between workers and employers across the EverTried network, preventing fraud and guaranteeing verified labor.
+                    </p>
+                    <div className="inline-flex items-center gap-2 bg-brand-DEFAULT/20 text-brand-light px-4 py-2 rounded-xl text-xs font-bold border border-brand-DEFAULT/30">
+                        <ShieldCheck className="w-4 h-4" /> Blockchain-grade Hashing Enabled
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    );
 };
 
-module.exports = {
-    extractVoiceSkills
-};
+export default ProfilePage;
