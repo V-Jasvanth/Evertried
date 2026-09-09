@@ -1,7 +1,11 @@
 const User = require('../models/User');
 const Otp = require('../models/Otp');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
+
+// --------------------------------------------------
+// JWT TOKEN
+// --------------------------------------------------
 
 const generateToken = (id) => {
     if (!process.env.JWT_SECRET) {
@@ -14,20 +18,12 @@ const generateToken = (id) => {
         { expiresIn: '30d' }
     );
 };
+
 // --------------------------------------------------
-// GMAIL SMTP CONFIGURATION
+// RESEND EMAIL CONFIGURATION
 // --------------------------------------------------
 
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-        
-    }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // --------------------------------------------------
 // SEND OTP
@@ -43,23 +39,33 @@ const sendOtp = async (req, res) => {
             });
         }
 
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.error('EMAIL_USER or EMAIL_PASS is missing in .env');
+        // Check Resend API key
+        if (!process.env.RESEND_API_KEY) {
+            console.error('RESEND_API_KEY is missing');
 
             return res.status(500).json({
                 message: 'Email service is not configured'
             });
         }
 
-        // Generate 6-digit OTP
+        // --------------------------------------------------
+        // GENERATE 6-DIGIT OTP
+        // --------------------------------------------------
+
         const otpCode = Math.floor(
             100000 + Math.random() * 900000
         ).toString();
 
-        // Remove previous OTPs
+        // --------------------------------------------------
+        // REMOVE PREVIOUS OTPs
+        // --------------------------------------------------
+
         await Otp.deleteMany({ email });
 
-        // Save new OTP
+        // --------------------------------------------------
+        // SAVE NEW OTP
+        // --------------------------------------------------
+
         await Otp.create({
             email,
             otp: otpCode
@@ -72,32 +78,52 @@ const sendOtp = async (req, res) => {
         console.log('==============================\n');
 
         // --------------------------------------------------
-        // SEND EMAIL
+        // SEND EMAIL USING RESEND
         // --------------------------------------------------
 
-        await transporter.sendMail({
-            from: `"EverTried" <${process.env.EMAIL_USER}>`,
-            to: email,
+        const { data, error } = await resend.emails.send({
+            from: process.env.RESEND_FROM_EMAIL || 'EverTried <onboarding@resend.dev>',
+            to: [email],
             subject: 'EverTried Login OTP',
-            text: `Your EverTried login OTP is ${otpCode}. This OTP is valid for 5 minutes.`,
             html: `
-                <div style="font-family: Arial, sans-serif; padding: 20px;">
-                    <h2>EverTried Login Code</h2>
+                <div style="
+                    font-family: Arial, sans-serif;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 30px;
+                    background: #ffffff;
+                    color: #111827;
+                ">
 
-                    <p>Your OTP for signing in to EverTried is:</p>
+                    <h2 style="
+                        margin-bottom: 20px;
+                        color: #111827;
+                    ">
+                        EverTried Login Code
+                    </h2>
+
+                    <p>
+                        Your OTP for signing in to EverTried is:
+                    </p>
 
                     <div style="
-                        font-size: 32px;
+                        font-size: 36px;
                         font-weight: bold;
-                        letter-spacing: 8px;
-                        margin: 20px 0;
+                        letter-spacing: 10px;
+                        margin: 25px 0;
+                        padding: 20px;
+                        background: #f3f4f6;
+                        border-radius: 10px;
+                        text-align: center;
                     ">
                         ${otpCode}
                     </div>
 
-                    <p>This OTP is valid for 5 minutes.</p>
-
                     <p>
+                        This OTP is valid for <strong>5 minutes</strong>.
+                    </p>
+
+                    <p style="color: #6b7280;">
                         If you did not request this code,
                         you can safely ignore this email.
                     </p>
@@ -106,11 +132,32 @@ const sendOtp = async (req, res) => {
                         Regards,<br>
                         <strong>EverTried Team</strong>
                     </p>
+
                 </div>
             `
         });
 
-        console.log(`Email sent successfully to ${email}`);
+        // --------------------------------------------------
+        // HANDLE RESEND ERROR
+        // --------------------------------------------------
+
+        if (error) {
+            console.error('\n==============================');
+            console.error('RESEND EMAIL FAILED');
+            console.error(error);
+            console.error('==============================\n');
+
+            return res.status(500).json({
+                message: 'Failed to send OTP email',
+                error: error.message || 'Resend email error'
+            });
+        }
+
+        console.log('\n==============================');
+        console.log('EMAIL SENT SUCCESSFULLY');
+        console.log(`Email: ${email}`);
+        console.log(`Resend ID: ${data?.id || 'N/A'}`);
+        console.log('==============================\n');
 
         return res.status(200).json({
             message: 'OTP sent successfully!'
@@ -119,7 +166,7 @@ const sendOtp = async (req, res) => {
     } catch (error) {
         console.error('\n==============================');
         console.error('EMAIL SENDING FAILED');
-        console.error(error.message);
+        console.error(error);
         console.error('==============================\n');
 
         return res.status(500).json({
@@ -143,6 +190,10 @@ const verifyOtp = async (req, res) => {
             });
         }
 
+        // --------------------------------------------------
+        // FIND VALID OTP
+        // --------------------------------------------------
+
         const validOtpEntry = await Otp.findOne({
             email,
             otp
@@ -154,10 +205,16 @@ const verifyOtp = async (req, res) => {
             });
         }
 
-        // Find existing user
+        // --------------------------------------------------
+        // FIND EXISTING USER
+        // --------------------------------------------------
+
         let user = await User.findOne({ email });
 
-        // Create new user if needed
+        // --------------------------------------------------
+        // CREATE NEW USER IF NEEDED
+        // --------------------------------------------------
+
         if (!user) {
             user = await User.create({
                 email,
@@ -165,8 +222,13 @@ const verifyOtp = async (req, res) => {
                 role: role || 'pending',
                 password: 'passwordless_account'
             });
-        } else {
-            // Update missing information if supplied
+        }
+
+        // --------------------------------------------------
+        // UPDATE MISSING INFORMATION
+        // --------------------------------------------------
+
+        else {
             let changed = false;
 
             if (name && !user.name) {
@@ -184,10 +246,17 @@ const verifyOtp = async (req, res) => {
             }
         }
 
-        // Delete used OTP
+        // --------------------------------------------------
+        // DELETE USED OTP
+        // --------------------------------------------------
+
         await Otp.deleteOne({
             _id: validOtpEntry._id
         });
+
+        // --------------------------------------------------
+        // RETURN USER + JWT
+        // --------------------------------------------------
 
         return res.json({
             _id: user._id,
@@ -221,7 +290,15 @@ const googleAuth = async (req, res) => {
             });
         }
 
+        // --------------------------------------------------
+        // FIND EXISTING USER
+        // --------------------------------------------------
+
         let user = await User.findOne({ email });
+
+        // --------------------------------------------------
+        // CREATE USER IF NEEDED
+        // --------------------------------------------------
 
         if (!user) {
             user = await User.create({
@@ -231,6 +308,10 @@ const googleAuth = async (req, res) => {
                 password: 'google_oauth_account'
             });
         }
+
+        // --------------------------------------------------
+        // RETURN USER + JWT
+        // --------------------------------------------------
 
         return res.json({
             _id: user._id,
