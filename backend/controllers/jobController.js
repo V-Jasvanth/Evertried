@@ -1,5 +1,6 @@
 const Job = require('../models/Job');
 const User = require('../models/User');
+const { createNotification } = require('../services/notificationService');
 
 // Helper function to rank workers based on instructions
 const rankWorkers = (workers) => {
@@ -70,7 +71,7 @@ const createJobAndMatch = async (req, res) => {
         let broadcastedCount = 0;
         let smsSentCount = 0;
 
-        rankedWorkers.forEach(worker => {
+        for (const worker of rankedWorkers) {
             // MOCK SMS NOTIFICATION
             console.log(`[SMS Gateway] Sending SMS to ${worker.name}: "New ${jobType} job nearby: ${title} paying ₹${pay}/day! Open EverTried to apply."`);
             smsSentCount++;
@@ -81,8 +82,8 @@ const createJobAndMatch = async (req, res) => {
                 io.to(socketId).emit('new_job', {
                     id: job._id,
                     title: job.title,
-                    employer: job.employer.name,
-                    employerId: job.employer._id,
+                    employer: job.employer?.name || 'Employer',
+                    employerId: job.employer?._id || employer,
                     location: 'Nearby', // Hardcoded or calculated
                     match: '98%', // Simplified
                     status: 'New',
@@ -91,7 +92,17 @@ const createJobAndMatch = async (req, res) => {
                 });
                 broadcastedCount++;
             }
-        });
+
+            // Create persistent Notification in MongoDB & emit to user socket room
+            await createNotification({
+                recipient: worker._id,
+                sender: employer,
+                type: 'JOB_CREATED',
+                title: 'New Job Available',
+                message: `A new ${jobType || 'service'} request "${title}" paying ₹${pay}/day is available nearby.`,
+                job: job._id
+            }, io);
+        }
 
         res.status(201).json({
             message: 'Job created and broadcasted',

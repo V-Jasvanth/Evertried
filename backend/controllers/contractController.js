@@ -2,6 +2,7 @@ const Contract = require('../models/Contract');
 const User = require('../models/User');
 const Job = require('../models/Job');
 const crypto = require('crypto');
+const { createNotification } = require('../services/notificationService');
 
 // @desc    Generate a new digital contract
 // @route   POST /api/contract/generate-contract
@@ -35,6 +36,17 @@ const generateContract = async (req, res) => {
         });
 
         await contract.save();
+
+        const io = req.app.get('io');
+        await createNotification({
+            recipient: workerId,
+            sender: employerId,
+            type: 'JOB_STARTED',
+            title: 'Contract Ready for Signature',
+            message: `Digital contract #${uniqueContractId} generated for "${job.title}". Please review and sign.`,
+            job: jobId
+        }, io);
+
         res.status(201).json(contract);
     } catch (error) {
         console.error(error);

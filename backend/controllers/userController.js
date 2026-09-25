@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { createNotification } = require('../services/notificationService');
 
 // @desc    Update worker skills
 // @route   POST /api/users/update-skills
@@ -82,6 +83,18 @@ const completeJob = async (req, res) => {
         worker.ratingCount = (worker.ratingCount || 0) + 1;
 
         await worker.save();
+
+        const io = req.app.get('io');
+        const senderId = req.user?._id || null;
+
+        await createNotification({
+            recipient: workerId,
+            sender: senderId,
+            type: 'JOB_COMPLETED',
+            title: 'Job Completed & Rated',
+            message: `Your job performance was rated ${rating} ⭐! Your new average rating is ${worker.rating.toFixed(1)}.`,
+            job: null
+        }, io);
 
         res.json({
             message: 'Job completed & rating updated',

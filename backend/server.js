@@ -25,6 +25,7 @@ const connectDB = require('./config/db');
 
 const Job = require('./models/Job');
 const User = require('./models/User');
+const { createNotification } = require('./services/notificationService');
 
 // ============================================================
 // Routes
@@ -34,6 +35,7 @@ const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const jobRoutes = require('./routes/jobRoutes');
 const geminiRoutes = require('./routes/geminiRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 // ============================================================
 // Database Connection
@@ -97,13 +99,18 @@ io.on('connection', (socket) => {
             return;
         }
 
+        const uid = userId.toString();
+
         connectedUsers.set(
-            userId.toString(),
+            uid,
             socket.id
         );
 
+        // Join user-specific socket room
+        socket.join(`user:${uid}`);
+
         console.log(
-            `Registered user ${userId} with socket ${socket.id}`
+            `Registered user ${uid} with socket ${socket.id} in room user:${uid}`
         );
     });
 
@@ -193,7 +200,7 @@ io.on('connection', (socket) => {
                     data.employerId?.toString()
                 );
 
-            // Notify employer
+            // Notify employer via socket
             if (employerSocket) {
 
                 io.to(employerSocket).emit(
@@ -208,6 +215,19 @@ io.on('connection', (socket) => {
                     }
                 );
 
+            }
+
+            // Persistent Notification for Employer
+            const employerId = job.employer;
+            if (employerId) {
+                await createNotification({
+                    recipient: employerId,
+                    sender: worker._id,
+                    type: 'JOB_APPLICATION',
+                    title: 'New Job Application',
+                    message: `${worker.name} has applied for your job "${job.title}".`,
+                    job: job._id
+                }, io);
             }
 
         } catch (error) {
@@ -294,7 +314,7 @@ io.on('connection', (socket) => {
                 await activeJobObj.save();
             }
 
-            // Notify worker
+            // Notify worker via legacy event
             const workerSocket =
                 connectedUsers.get(
                     data.workerId.toString()
@@ -307,6 +327,21 @@ io.on('connection', (socket) => {
                     data
                 );
 
+            }
+
+            // Persistent Notification for Worker
+            if (activeJobObj) {
+                const isHired = data.status === 'hired';
+                await createNotification({
+                    recipient: data.workerId,
+                    sender: activeJobObj.employer,
+                    type: isHired ? 'APPLICATION_ACCEPTED' : 'APPLICATION_REJECTED',
+                    title: isHired ? 'Application Accepted' : 'Application Update',
+                    message: isHired
+                        ? `Your application for "${activeJobObj.title}" has been accepted!`
+                        : `Your application for "${activeJobObj.title}" was not selected.`,
+                    job: activeJobObj._id
+                }, io);
             }
 
         } catch (error) {
@@ -368,6 +403,11 @@ app.use(
 app.use(
     '/api/gemini',
     geminiRoutes
+);
+
+app.use(
+    '/api/notifications',
+    notificationRoutes
 );
 
 app.use(

@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Briefcase, HardHat, Home, LogOut, User as UserIcon } from 'lucide-react';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import NotificationCenter from './NotificationCenter';
 
 const Layout = () => {
     const location = useLocation();
@@ -71,6 +72,8 @@ const Layout = () => {
                                     >
                                         <UserIcon className="w-4 h-4" /> Profile
                                     </Link>
+
+                                    <NotificationCenter />
 
                                     <div className="h-6 w-[1px] bg-slate-200"></div>
 
