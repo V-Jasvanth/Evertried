@@ -10,7 +10,7 @@ The platform aims to simplify local hiring by helping employers discover suitabl
 
 ## Live Demo
 
-[Visit EverTried](https://evertried.onrender.com)
+[Visit EverTried](https://evertried-1.onrender.com)
 
 ---
 
@@ -25,7 +25,7 @@ EverTried addresses this problem through a unified platform where:
 - Workers can discover nearby job opportunities.
 - Employers can discover suitable workers.
 - AI assists with worker skill and experience profiling.
-- Real-time updates improve the job discovery and hiring workflow.
+- Real-time updates and persistent notifications improve the job discovery and hiring workflow.
 
 ---
 
@@ -66,15 +66,43 @@ EverTried addresses this problem through a unified platform where:
 - AI-assisted worker profiling
 - Real-time job updates
 - Real-time communication using Socket.IO
+- Real-time persistent notification system
+- User-specific notification delivery
+- Notification unread count badge and read/unread status management
+- Offline notification persistence
+- Job lifecycle notifications (JOB_CREATED, JOB_APPLICATION, APPLICATION_ACCEPTED, APPLICATION_REJECTED, JOB_STARTED, JOB_COMPLETED)
 - Worker assignment tracking
 - Digital signatures
 - Contract viewing
 - MongoDB Atlas integration
-- Email services
+- Email services (Resend)
 - Protected dashboard workflows
 - Responsive web interface
 - Environment-based configuration
 - Production deployment
+
+---
+
+## Notification System
+
+EverTried includes a production-grade real-time persistent notification system connecting workers and employers across all key job lifecycle events.
+
+### Capabilities
+
+- Persistent MongoDB notification storage
+- Real-time Socket.IO user room notification delivery (`user:<userId>`)
+- User-specific notification targeting and strict isolation
+- Unread notification count badge in navigation header
+- Mark single notification as read
+- Mark all notifications as read
+- Offline notification persistence (retrieved upon user login)
+- Job lifecycle notification events:
+  - `JOB_CREATED`: Sent to matched workers when a relevant job is created
+  - `JOB_APPLICATION`: Sent to employer when a worker applies
+  - `APPLICATION_ACCEPTED`: Sent to worker when employer hires them
+  - `APPLICATION_REJECTED`: Sent to worker when application is not selected
+  - `JOB_STARTED`: Sent to worker when contract is created/started
+  - `JOB_COMPLETED`: Sent to worker when job is marked completed
 
 ---
 
@@ -122,6 +150,7 @@ Workers can:
 - Apply for opportunities
 - Track applications
 - View assignments
+- Receive real-time persistent notifications
 
 ### Employer Dashboard
 
@@ -133,6 +162,7 @@ Employers can:
 - Discover workers
 - Review applications
 - Manage hiring workflows
+- Receive applicant notifications in real time
 
 ### Coordinator Dashboard
 
@@ -158,7 +188,7 @@ Coordinators can:
 | Authentication | Firebase |
 | Backend Authentication | JWT |
 | AI | Google Gemini |
-| Email | Nodemailer |
+| Email | Resend |
 | Real-time Communication | Socket.IO |
 | Styling | Tailwind CSS |
 | Deployment | Render |
@@ -183,7 +213,7 @@ Coordinators can:
              |                             |
              |                      +------+------+
              |                      |             |
-             |                  MongoDB       AI / Email
+             |                  MongoDB       AI / Email / Notifications
              |                   Atlas         Services
              |                      |
              +----------------------+ 
@@ -193,7 +223,11 @@ Coordinators can:
                          +----------+----------+
                          |                     |
                       Workers              Employers
-Project Structure
+```
+
+### Project Structure
+
+```text
 EverTried/
 │
 ├── backend/
@@ -221,77 +255,118 @@ EverTried/
 │
 ├── .gitignore
 └── README.md
-Production Deployment
+```
+
+---
+
+## Production Deployment
 
 EverTried is deployed using Render.
 
-Frontend
+### Frontend
 
-The React + Vite application is deployed as the production web application.
+The React + Vite application is deployed as the production web application at `https://evertried-1.onrender.com`.
 
-Backend
+### Backend
 
-The Node.js + Express backend is deployed as a web service.
+The Node.js + Express backend is deployed as a web service at `https://evertried.onrender.com`.
 
-Database
+### Database
 
 MongoDB Atlas is used as the production database.
 
-Authentication
+### Authentication
 
 Firebase Authentication provides Google Sign-In and passwordless authentication functionality.
 
-Current Status
+---
+
+## Current Status
 
 The core EverTried platform is operational.
 
-Completed
-Worker authentication
-Employer authentication
-Email OTP login
-Google Sign-In
-Firebase authentication configuration
-MongoDB Atlas connection
-Backend APIs
-Worker dashboard
-Employer dashboard
-Coordinator dashboard
-Job posting workflow
-Job application workflow
-Worker assignment workflow
-AI voice profiling
-Gemini skill extraction
-Socket.IO integration
-Digital signature component
-Contract viewer
-Protected routes
-Production build verification
-Production deployment
-Recent Development
-September 2026
-Improved Google authentication workflow.
-Configured Firebase authorized domains for production.
-Verified Google Sign-In in the deployed environment.
-Verified authentication persistence after page refresh.
-Improved worker AI voice profiling.
-Improved Gemini skill extraction and validation.
-Continued improvements to worker and employer workflows.
-Future Improvements
+### Completed
+
+- Worker authentication
+- Employer authentication
+- Email OTP login
+- Google Sign-In
+- Firebase authentication configuration
+- MongoDB Atlas connection
+- Backend APIs
+- Worker dashboard
+- Employer dashboard
+- Coordinator dashboard
+- Job posting workflow
+- Job application workflow
+- Worker assignment workflow
+- AI voice profiling
+- Gemini skill extraction
+- Socket.IO integration
+- Real-time persistent notification system
+- User-specific notification delivery
+- Notification read/unread management
+- Offline notification persistence
+- Job lifecycle notification integration
+- Digital signature component
+- Contract viewer
+- Protected routes
+- Production build verification
+- Production deployment
+
+### Recent Development
+
+#### September 2026
+
+- Implemented real-time persistent notifications
+- Added MongoDB notification persistence
+- Added user-specific Socket.IO notification delivery
+- Integrated notifications with job lifecycle events
+- Added notification read/unread controls
+- Verified notification system through automated end-to-end smoke tests
+- Improved Google authentication workflow.
+- Configured Firebase authorized domains for production.
+- Verified Google Sign-In in the deployed environment.
+- Verified authentication persistence after page refresh.
+- Improved worker AI voice profiling.
+- Improved Gemini skill extraction and validation.
+- Continued improvements to worker and employer workflows.
+
+---
+
+## Verification
+
+- Frontend ESLint: Passed
+- Frontend production build: Passed
+- Backend syntax check: Passed
+- Notification API tests: Passed
+- Notification persistence tests: Passed
+- Socket.IO delivery tests: Passed
+- Authorization tests: Passed
+- Offline notification persistence tests: Passed
+- Job lifecycle notification tests: Passed
+- Frontend notification verification: Passed
+
+---
+
+## Future Improvements
 
 Potential future improvements include:
 
-More advanced worker-job recommendation algorithms
-Improved geographic matching
-Enhanced AI-powered job recommendations
-Worker availability scheduling
-Advanced employer analytics
-Notification system improvements
-Mobile application support
-License
+- More advanced worker-job recommendation algorithms
+- Improved geographic matching
+- Enhanced AI-powered job recommendations
+- Worker availability scheduling
+- Advanced employer analytics
+- Mobile application support
+
+---
+
+## License
 
 This project is developed as an academic and portfolio project.
 
-Author
+## Author
 
 Jasvanth
 
