@@ -157,7 +157,29 @@ const getMatchedWorkers = async (req, res) => {
     }
 };
 
+// @desc    Get job details by ID
+// @route   GET /api/jobs/:id
+// @access  Protected
+const getJobById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const job = await Job.findById(id)
+            .populate('employer', 'name rating location locationName email')
+            .populate('applicants.worker', 'name rating skills primarySkill wageExpectation locationName email');
+
+        if (!job) {
+            return res.status(404).json({ message: 'Job not found' });
+        }
+
+        res.json(job);
+    } catch (error) {
+        console.error('Error fetching job by ID:', error);
+        res.status(500).json({ message: 'Server error fetching job details' });
+    }
+};
+
 module.exports = {
     createJobAndMatch,
-    getMatchedWorkers
+    getMatchedWorkers,
+    getJobById
 };

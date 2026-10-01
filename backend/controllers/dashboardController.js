@@ -12,8 +12,14 @@ const getWorkerDashboard = async (req, res) => {
         if (!user) return res.status(404).json({ message: 'User profile not found in database' });
 
         // Fetch jobs where worker applied
-        const myApplications = await Job.find({ "applicants.worker": userId }).populate('employer', 'name location');
-        const activeJob = myApplications.find(j => j.status === 'in-progress' && j.applicants.some(a => a.worker.toString() === userId.toString() && a.status === 'hired'));
+        const myApplications = await Job.find({ "applicants.worker": userId })
+            .populate('employer', 'name rating location locationName')
+            .sort({ updatedAt: -1 });
+
+        const activeJob = myApplications.find(j => 
+            ['in-progress', 'partially-filled', 'open'].includes(j.status) && 
+            j.applicants.some(a => a.worker && a.worker.toString() === userId.toString() && a.status === 'hired')
+        );
 
         let activeContract = null;
         if (activeJob) {
@@ -22,31 +28,38 @@ const getWorkerDashboard = async (req, res) => {
         }
 
         // Basic earnings potential calculation based on wage expectation & rating
-        // System explicitly requested to hover between 6000 - 7000 Rs based on demand
         const baselinePredictedDemand = 6000 + Math.floor(Math.random() * 1000); 
         const ratingBonus = user.rating > 0 ? Math.round((user.rating / 5) * 500) : 0;
         const skillBonus = (user.skills && user.skills.length > 0) ? user.skills.length * 100 : 0;
         
         const earningsPotential = baselinePredictedDemand + ratingBonus + skillBonus;
 
-        // Nearby jobs (Placeholder without strict geospatial for MVP)
-        const nearbyJobs = await Job.find({ status: 'open' }).sort({ createdAt: -1 }).limit(10);
+        // Nearby open jobs
+        const nearbyJobs = await Job.find({ status: 'open' })
+            .populate('employer', 'name rating location locationName')
+            .sort({ createdAt: -1 })
+            .limit(10);
 
-res.json({
-    user: {
-        name: user.name,
-        rating: user.rating,
-        jobsCompleted: user.ratingCount,
-        skills: user.skills || []
-    },
-    activeJob,
-    activeContract,
-    earningsPotential,
-    nearbyJobs,
-    myApplications
-});
+        res.json({
+            user: {
+                _id: user._id,
+                name: user.name,
+                rating: user.rating,
+                ratingCount: user.ratingCount || 0,
+                jobsCompleted: user.ratingCount || 0,
+                skills: user.skills || [],
+                primarySkill: user.primarySkill,
+                wageExpectation: user.wageExpectation,
+                availability: user.availability
+            },
+            activeJob,
+            activeContract,
+            earningsPotential,
+            nearbyJobs,
+            myApplications
+        });
     } catch (error) {
-        console.error(error);
+        console.error('Error fetching worker dashboard:', error);
         res.status(500).json({ message: 'Server error fetching worker dashboard' });
     }
 };
@@ -58,11 +71,13 @@ const getEmployerDashboard = async (req, res) => {
     try {
         const userId = req.user._id;
         
-        const myJobs = await Job.find({ employer: userId }).populate('applicants.worker', 'name rating skills');
+        const myJobs = await Job.find({ employer: userId })
+            .populate('applicants.worker', 'name rating skills primarySkill wageExpectation locationName email')
+            .sort({ createdAt: -1 });
+
         const activeJobs = myJobs
             .filter(j => ['open', 'partially-filled', 'in-progress'].includes(j.status))
             .map(job => {
-                // Recalculate filledSlots live from applicants array (source of truth)
                 const filledSlots = job.applicants.filter(a => a.status === 'hired').length;
                 return {
                     ...job.toObject(),
@@ -73,7 +88,7 @@ const getEmployerDashboard = async (req, res) => {
             });
         
         let totalApplications = 0;
-        myJobs.forEach(j => { totalApplications += j.applicants.length });
+        myJobs.forEach(j => { totalApplications += (j.applicants ? j.applicants.length : 0) });
 
         const insights = {
             totalPosted: myJobs.length,
@@ -81,11 +96,13 @@ const getEmployerDashboard = async (req, res) => {
             activeNow: activeJobs.length
         };
 
-        const suggestions = await User.find({ role: 'worker', rating: { $gte: 4 } }).select('name rating primarySkill').limit(5);
+        const suggestions = await User.find({ role: 'worker', rating: { $gte: 4 } })
+            .select('name rating primarySkill skills wageExpectation')
+            .limit(5);
 
-        res.json({ activeJobs, insights, suggestions });
+        res.json({ activeJobs, insights, suggestions, allJobs: myJobs });
     } catch (error) {
-        console.error(error);
+        console.error('Error fetching employer dashboard:', error);
         res.status(500).json({ message: 'Server error fetching employer dashboard' });
     }
 };

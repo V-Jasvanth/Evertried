@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect, useRef } from 'react';
+import { useState, useContext, useEffect, useRef, useCallback } from 'react';
 import {
     Plus,
     Trash2,
@@ -12,13 +12,18 @@ import {
     Mic,
     Mic2,
     Sparkles,
-    AlertCircle
+    AlertCircle,
+    Eye,
+    Clock,
+    FileText,
+    XCircle
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 import DigitalSignature from '../components/DigitalSignature';
 import ContractViewer from '../components/ContractViewer';
+import JobDetailModal from '../components/JobDetailModal';
 
 const WorkerDashboard = () => {
     const { user, updateSkills } = useContext(AuthContext);
@@ -33,15 +38,18 @@ const WorkerDashboard = () => {
     // Gemini AI Voice Setup
     const [isListeningAI, setIsListeningAI] = useState(false);
     const [aiMessage, setAiMessage] = useState('');
-
     const [jobs, setJobs] = useState([]);
+    const [activeTab, setActiveTab] = useState('applications'); // 'applications' | 'opportunities'
+    const [selectedJobDetailId, setSelectedJobDetailId] = useState(null);
+    const [selectedDetailAppStatus, setSelectedDetailAppStatus] = useState(null);
 
     // Socket connection is kept in a ref instead of state
     const socketRef = useRef(null);
 
     const [dashboardData, setDashboardData] = useState({
         earningsPotential: 4200,
-        user: {}
+        user: {},
+        myApplications: []
     });
 
     const [activeContractId, setActiveContractId] = useState(null);
@@ -66,59 +74,49 @@ const WorkerDashboard = () => {
     // DASHBOARD + SOCKET CONNECTION
     // -----------------------------
 
+    const fetchDash = useCallback(async () => {
+        if (!user?.token) return;
+        try {
+            const config = {
+                headers: {
+                    Authorization: `Bearer ${user.token}`
+                }
+            };
+
+            const res = await axios.get(
+                `${API_URL}/api/dashboard/worker`,
+                config
+            );
+
+            setDashboardData(res.data);
+
+            if (res.data.user?.skills) {
+                setSkills(res.data.user.skills);
+            }
+
+            if (res.data.nearbyJobs) {
+                setJobs((prevJobs) => {
+                    if (prevJobs.length > 0) {
+                        return prevJobs;
+                    }
+                    return res.data.nearbyJobs.map((j) => ({
+                        ...j,
+                        id: j._id
+                    }));
+                });
+            }
+        } catch (err) {
+            console.error('Error fetching worker dashboard:', err);
+        }
+    }, [user, API_URL]);
+
     useEffect(() => {
         if (!user?.token) return;
 
-        const fetchDash = async () => {
-            try {
-                const config = {
-                    headers: {
-                        Authorization: `Bearer ${user.token}`
-                    }
-                };
-
-                const res = await axios.get(
-                    `${API_URL}/api/dashboard/worker`,
-                    config
-                );
-
-                setDashboardData(res.data);
-
-                // Load saved skills from MongoDB
-                if (res.data.user?.skills) {
-                    setSkills(res.data.user.skills);
-                }
-
-                // Load nearby jobs only when the current job list is empty.
-                // Using the functional state form avoids reading jobs.length
-                // inside this effect.
-                if (res.data.nearbyJobs) {
-                    setJobs((prevJobs) => {
-                        if (prevJobs.length > 0) {
-                            return prevJobs;
-                        }
-
-                        return res.data.nearbyJobs.map((j) => ({
-                            ...j,
-                            id: j._id
-                        }));
-                    });
-                }
-            } catch (err) {
-                console.error(
-                    'Error fetching worker dashboard:',
-                    err
-                );
-            }
-        };
-
-        // Delay initial fetch to avoid synchronous state updates
-        // directly inside the effect.
         const initialFetch = setTimeout(() => {
             fetchDash();
         }, 0);
 
-        // Create Socket.IO connection
         const newSocket = io(API_URL);
         socketRef.current = newSocket;
 
@@ -134,10 +132,6 @@ const WorkerDashboard = () => {
         // Listen for job confirmation
         newSocket.on('job_confirmation', (data) => {
             if (data.status === 'hired') {
-                alert(
-                    `Congratulations! You have been hired for: ${data.title}`
-                );
-
                 setJobs((prev) =>
                     prev.map((job) =>
                         job.id === data.jobId
@@ -146,16 +140,22 @@ const WorkerDashboard = () => {
                     )
                 );
             }
+            fetchDash();
+        });
+
+        // Real-time listener for persistent notification updates
+        newSocket.on('notification:new', (notif) => {
+            if (['APPLICATION_ACCEPTED', 'APPLICATION_REJECTED', 'JOB_STARTED', 'JOB_COMPLETED'].includes(notif.type)) {
+                fetchDash();
+            }
         });
 
         return () => {
             clearTimeout(initialFetch);
-
             newSocket.close();
-
             socketRef.current = null;
         };
-    }, [user, API_URL]);
+    }, [user, API_URL, fetchDash]);
 
     // -----------------------------
     // GEMINI VOICE PROFILE
@@ -632,173 +632,325 @@ const WorkerDashboard = () => {
                         </div>
                     )}
 
-                    <div className="flex items-center justify-between mb-4 mt-6">
-                        <h2 className="font-semibold text-lg text-slate-900">
-                            Hyperlocal Search (1-5km)
-                        </h2>
+                    {/* Header Tabs for Right Column */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-slate-200 pb-4">
+                        <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl">
+                            <button
+                                onClick={() => setActiveTab('applications')}
+                                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                                    activeTab === 'applications'
+                                        ? 'bg-white text-slate-900 shadow-sm'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                My Applications ({dashboardData.myApplications?.length || 0})
+                            </button>
 
-                        <div className="flex items-center gap-2 text-sm text-slate-600 bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm font-bold">
-                            <span className="relative flex h-2 w-2 mr-1">
+                            <button
+                                onClick={() => setActiveTab('opportunities')}
+                                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                                    activeTab === 'opportunities'
+                                        ? 'bg-white text-slate-900 shadow-sm'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                Live Job Opportunities ({jobs.length})
+                            </button>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs text-slate-600 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm font-bold self-start sm:self-auto">
+                            <span className="relative flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-DEFAULT opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-DEFAULT"></span>
                             </span>
-
-                            <Navigation className="w-4 h-4" />
-                            Active Connection
+                            <Navigation className="w-3.5 h-3.5" />
+                            Live Engine Stream
                         </div>
                     </div>
 
-                    <div className="grid gap-4">
-                        {jobs.length === 0 && (
-                            <div className="bg-white border-2 border-dashed border-slate-200 p-12 text-center rounded-3xl shadow-sm">
-                                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 relative">
-                                    <div className="absolute inset-0 border-4 border-slate-200 rounded-full border-t-transparent animate-spin"></div>
-                                    <Search className="w-6 h-6 text-slate-400" />
+                    {/* TAB 1: MY APPLICATIONS */}
+                    {activeTab === 'applications' && (
+                        <div className="space-y-4">
+                            {dashboardData.myApplications?.length === 0 ? (
+                                <div className="bg-white border-2 border-dashed border-slate-200 p-12 text-center rounded-3xl shadow-sm">
+                                    <Clock className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                                    <h3 className="font-bold text-slate-700 text-lg">No Applications Submitted Yet</h3>
+                                    <p className="text-slate-500 max-w-sm mx-auto mt-2 text-sm">
+                                        Browse the "Live Job Opportunities" tab to apply for nearby jobs matching your skills.
+                                    </p>
+                                    <button
+                                        onClick={() => setActiveTab('opportunities')}
+                                        className="mt-4 px-5 py-2.5 bg-brand-DEFAULT text-white rounded-xl font-bold text-sm hover:bg-brand-dark transition-all shadow-md"
+                                    >
+                                        Browse Live Jobs
+                                    </button>
                                 </div>
+                            ) : (
+                                dashboardData.myApplications?.map((appJob) => {
+                                    // Determine worker's application status
+                                    const appObj = appJob.applicants?.find(
+                                        (a) => (a.worker?._id || a.worker)?.toString() === user._id?.toString()
+                                    );
+                                    const appStatus = appObj?.status || 'applied';
 
-                                <h3 className="font-bold text-slate-700 text-lg">
-                                    Listening for new jobs...
-                                </h3>
+                                    const statusBadgeConfig = {
+                                        applied: { bg: 'bg-amber-50 text-amber-800 border-amber-200', text: 'Applied • Under Review' },
+                                        hired: { bg: 'bg-green-100 text-green-800 border-green-300 animate-pulse', text: 'Accepted & Hired! 🎉' },
+                                        rejected: { bg: 'bg-red-50 text-red-700 border-red-200', text: 'Application Not Selected' },
+                                        'in-progress': { bg: 'bg-blue-50 text-blue-800 border-blue-200', text: 'Work In Progress' },
+                                        completed: { bg: 'bg-emerald-50 text-emerald-800 border-emerald-200', text: 'Job Completed & Rated' }
+                                    }[appStatus] || { bg: 'bg-slate-100 text-slate-700 border-slate-200', text: appStatus };
 
-                                <p className="text-slate-500 max-w-sm mx-auto mt-2">
-                                    New jobs will instantly appear here when employers post them nearby.
-                                </p>
-                            </div>
-                        )}
+                                    const employerName = appJob.employer?.name || (typeof appJob.employer === 'string' ? appJob.employer : 'Employer');
 
-                        {jobs.map((job) => {
-                            const totalSlots = job.workerCount ?? 1;
-                            const filledSlots = job.filledSlots ?? 0;
-                            const openSlots = Math.max(
-                                0,
-                                totalSlots - filledSlots
-                            );
-
-                            const isFull =
-                                job.status === 'in-progress' ||
-                                openSlots === 0;
-
-                            return (
-                                <div
-                                    key={job.id}
-                                    className={`bg-white border border-slate-200 p-6 rounded-2xl shadow-sm transform transition-all duration-300 ${
-                                        job.status === 'Hired!'
-                                            ? 'scale-[1.02] border-green-500 shadow-xl shadow-green-100 z-10'
-                                            : 'hover:shadow-md cursor-pointer group'
-                                    }`}
-                                >
-                                    <div className="flex justify-between items-start mb-4">
-
-                                        <div>
-                                            <div className="flex flex-wrap items-center gap-2 mb-2">
-
-                                                <span className="px-2.5 py-0.5 bg-green-100 text-green-700 font-bold text-xs rounded-full uppercase tracking-wider shadow-sm">
-                                                    {job.status || 'New'}
-                                                </span>
-
-                                                <span className="text-slate-600 text-xs font-bold flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                                                    <MapPin className="w-3.5 h-3.5 text-brand-DEFAULT" />
-
-                                                    {job.location &&
-                                                    typeof job.location === 'string'
-                                                        ? job.location
-                                                        : 'Nearby'}
-                                                </span>
-
-                                                {totalSlots > 1 &&
-                                                    (isFull ? (
-                                                        <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
-                                                            All positions filled
+                                    return (
+                                        <div
+                                            key={appJob._id}
+                                            className={`bg-white border rounded-2xl p-6 shadow-sm transition-all ${
+                                                appStatus === 'hired'
+                                                    ? 'border-green-400 shadow-md shadow-green-100'
+                                                    : 'border-slate-200 hover:border-slate-300'
+                                            }`}
+                                        >
+                                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <span className={`px-3 py-1 border text-xs font-bold rounded-full uppercase tracking-wider ${statusBadgeConfig.bg}`}>
+                                                            {statusBadgeConfig.text}
                                                         </span>
-                                                    ) : (
-                                                        <span className="text-xs font-bold text-brand-dark bg-brand-light px-2 py-0.5 rounded-full">
-                                                            {openSlots} of {totalSlots} positions open
+
+                                                        <span className="text-xs font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 flex items-center gap-1">
+                                                            <MapPin className="w-3 h-3 text-brand-DEFAULT" />
+                                                            {appJob.employer?.locationName || 'Nearby'}
                                                         </span>
-                                                    ))}
-                                            </div>
+                                                    </div>
 
-                                            <h3 className="font-bold text-xl text-slate-900 group-hover:text-brand-DEFAULT transition-colors">
-                                                {job.title}
-                                            </h3>
+                                                    <h3 className="font-bold text-xl text-slate-900">
+                                                        {appJob.title}
+                                                    </h3>
 
-                                            <div className="flex items-center gap-2 mt-2">
-                                                <div className="w-6 h-6 rounded-full bg-slate-200 text-xs font-bold flex items-center justify-center text-slate-500">
-                                                    {job.employer
-                                                        ? job.employer[0]
-                                                        : 'E'}
+                                                    <p className="text-sm font-semibold text-slate-600 mt-1">
+                                                        Employer: <span className="text-slate-900 font-bold">{employerName}</span>
+                                                    </p>
                                                 </div>
 
-                                                <p className="text-sm font-semibold text-slate-600">
-                                                    {job.employer || 'Employer'}{' '}
-                                                    <span className="font-normal opacity-50 ml-1">
-                                                        • Highly Rated Employer
-                                                    </span>
-                                                </p>
+                                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-right self-start sm:self-auto">
+                                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pay Offered</p>
+                                                    <p className="text-xl font-black text-slate-900">₹{appJob.pay} <span className="text-xs font-normal text-slate-500">/ day</span></p>
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        <div className="text-right">
-                                            <div className="inline-flex flex-col items-center justify-center bg-brand-light border border-brand-DEFAULT/20 rounded-xl px-4 py-2 hover:bg-brand-DEFAULT hover:text-white transition-colors group relative overflow-hidden shadow-sm">
-                                                <span className="text-[10px] text-brand-dark group-hover:text-brand-light font-bold uppercase tracking-wider mb-0.5">
-                                                    Engine Fit
-                                                </span>
+                                            {/* Skills required */}
+                                            {appJob.requiredSkills && appJob.requiredSkills.length > 0 && (
+                                                <div className="flex flex-wrap gap-1.5 mb-4">
+                                                    {appJob.requiredSkills.map((sk, i) => (
+                                                        <span key={i} className="text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-100 px-2.5 py-0.5 rounded-lg">
+                                                            {sk}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
 
-                                                <span className="text-xl font-black text-brand-DEFAULT group-hover:text-white leading-none relative z-10">
-                                                    {job.match || '90%'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-3 pt-5 border-t border-slate-100 mt-2">
-
-                                        {job.status === 'Hired!' ? (
-                                            <div className="flex-1 bg-green-50 text-green-700 border border-green-200 py-3 rounded-xl font-bold flex items-center justify-center gap-2 animate-pulse shadow-inner">
-                                                <CheckCircle className="w-5 h-5 text-green-500" />
-                                                You Are Hired!
-                                            </div>
-                                        ) : job.actionState === 'applied' ? (
-                                            <div className="flex-1 bg-slate-50 text-brand-DEFAULT border border-slate-200 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-inner">
-                                                <Search className="w-4 h-4 animate-spin" />
-                                                Application Sent. Awaiting Employer Response...
-                                            </div>
-                                        ) : isFull ? (
-                                            <div className="flex-1 bg-slate-50 text-slate-400 border border-slate-200 py-3 rounded-xl font-bold flex items-center justify-center gap-2">
-                                                All positions filled — no openings
-                                            </div>
-                                        ) : (
-                                            <>
+                                            {/* Action Bar */}
+                                            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
                                                 <button
-                                                    onClick={() =>
-                                                        handleApply(
-                                                            job.id,
-                                                            job.employerId ||
-                                                                job.employer
-                                                        )
-                                                    }
-                                                    className="flex-1 bg-brand-DEFAULT text-white py-3 rounded-xl font-bold hover:bg-brand-dark transition-colors cursor-pointer flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-brand-DEFAULT/20 text-sm"
+                                                    onClick={() => {
+                                                        setSelectedJobDetailId(appJob._id);
+                                                        setSelectedDetailAppStatus(appStatus);
+                                                    }}
+                                                    className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
                                                 >
-                                                    <AlertCircle className="w-4 h-4" />
-                                                    Apply Instantly
+                                                    <Eye className="w-4 h-4 text-slate-500" />
+                                                    View Details
                                                 </button>
 
-                                                <button
-                                                    onClick={() =>
-                                                        handleDecline(job.id)
-                                                    }
-                                                    className="px-6 py-3 bg-white text-slate-500 hover:bg-red-50 hover:text-red-700 hover:border-red-200 rounded-xl font-bold border border-slate-200 transition-colors cursor-pointer active:scale-95 text-sm shadow-sm"
-                                                >
-                                                    Decline
-                                                </button>
-                                            </>
-                                        )}
+                                                {appStatus === 'hired' && (
+                                                    <button
+                                                        onClick={() => {
+                                                            if (dashboardData.activeContract?._id) {
+                                                                setActiveContractId(dashboardData.activeContract._id);
+                                                            } else {
+                                                                alert('Contract is generated. Refreshing dashboard...');
+                                                                fetchDash();
+                                                            }
+                                                        }}
+                                                        className="px-5 py-2 bg-green-600 text-white rounded-xl font-bold text-xs hover:bg-green-700 transition-colors shadow-sm flex items-center gap-1.5"
+                                                    >
+                                                        <CheckCircle className="w-4 h-4" />
+                                                        View Digital Contract
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    )}
+
+                    {/* TAB 2: LIVE JOB OPPORTUNITIES */}
+                    {activeTab === 'opportunities' && (
+                        <div className="grid gap-4">
+                            {jobs.length === 0 && (
+                                <div className="bg-white border-2 border-dashed border-slate-200 p-12 text-center rounded-3xl shadow-sm">
+                                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 relative">
+                                        <div className="absolute inset-0 border-4 border-slate-200 rounded-full border-t-transparent animate-spin"></div>
+                                        <Search className="w-6 h-6 text-slate-400" />
                                     </div>
+                                    <h3 className="font-bold text-slate-700 text-lg">Listening for new jobs...</h3>
+                                    <p className="text-slate-500 max-w-sm mx-auto mt-2 text-sm">
+                                        New jobs will instantly appear here when employers post them nearby.
+                                    </p>
                                 </div>
-                            );
-                        })}
-                    </div>
+                            )}
+
+                            {jobs.map((job) => {
+                                const totalSlots = job.workerCount ?? 1;
+                                const filledSlots = job.filledSlots ?? 0;
+                                const openSlots = Math.max(0, totalSlots - filledSlots);
+                                const isFull = job.status === 'in-progress' || openSlots === 0;
+
+                                return (
+                                    <div
+                                        key={job.id}
+                                        className={`bg-white border border-slate-200 p-6 rounded-2xl shadow-sm transform transition-all duration-300 ${
+                                            job.status === 'Hired!'
+                                                ? 'scale-[1.02] border-green-500 shadow-xl shadow-green-100 z-10'
+                                                : 'hover:shadow-md group'
+                                        }`}
+                                    >
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                                                    <span className="px-2.5 py-0.5 bg-green-100 text-green-700 font-bold text-xs rounded-full uppercase tracking-wider shadow-sm">
+                                                        {job.status || 'New'}
+                                                    </span>
+
+                                                    <span className="text-slate-600 text-xs font-bold flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                                        <MapPin className="w-3.5 h-3.5 text-brand-DEFAULT" />
+                                                        {job.location && typeof job.location === 'string' ? job.location : 'Nearby'}
+                                                    </span>
+
+                                                    {totalSlots > 1 && (
+                                                        isFull ? (
+                                                            <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                                                                All positions filled
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-xs font-bold text-brand-dark bg-brand-light px-2 py-0.5 rounded-full">
+                                                                {openSlots} of {totalSlots} positions open
+                                                            </span>
+                                                        )
+                                                    )}
+                                                </div>
+
+                                                <h3 className="font-bold text-xl text-slate-900 group-hover:text-brand-DEFAULT transition-colors">
+                                                    {job.title}
+                                                </h3>
+
+                                                <div className="flex items-center gap-2 mt-2">
+                                                    <div className="w-6 h-6 rounded-full bg-slate-200 text-xs font-bold flex items-center justify-center text-slate-500">
+                                                        {job.employer ? job.employer[0] : 'E'}
+                                                    </div>
+
+                                                    <p className="text-sm font-semibold text-slate-600">
+                                                        {job.employer || 'Employer'}{' '}
+                                                        <span className="font-normal opacity-50 ml-1">
+                                                            • Verified Employer
+                                                        </span>
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="text-right">
+                                                <div className="inline-flex flex-col items-center justify-center bg-brand-light border border-brand-DEFAULT/20 rounded-xl px-4 py-2 group-hover:bg-brand-DEFAULT group-hover:text-white transition-colors">
+                                                    <span className="text-[10px] text-brand-dark group-hover:text-brand-light font-bold uppercase tracking-wider mb-0.5">
+                                                        Match Fit
+                                                    </span>
+                                                    <span className="text-xl font-black text-brand-DEFAULT group-hover:text-white leading-none">
+                                                        {job.match || '90%'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3 pt-5 border-t border-slate-100 mt-2">
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedJobDetailId(job.id || job._id);
+                                                    setSelectedDetailAppStatus(job.actionState === 'applied' ? 'applied' : null);
+                                                }}
+                                                className="px-4 py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
+                                            >
+                                                <Eye className="w-4 h-4 text-slate-500" />
+                                                Full Details
+                                            </button>
+
+                                            {job.status === 'Hired!' ? (
+                                                <div className="flex-1 bg-green-50 text-green-700 border border-green-200 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 animate-pulse text-xs">
+                                                    <CheckCircle className="w-4 h-4 text-green-500" />
+                                                    You Are Hired!
+                                                </div>
+                                            ) : job.actionState === 'applied' ? (
+                                                <div className="flex-1 bg-amber-50 text-amber-800 border border-amber-200 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 text-xs">
+                                                    <Clock className="w-4 h-4 text-amber-600" />
+                                                    Application Submitted
+                                                </div>
+                                            ) : isFull ? (
+                                                <div className="flex-1 bg-slate-50 text-slate-400 border border-slate-200 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 text-xs">
+                                                    Positions Full
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <button
+                                                        onClick={() =>
+                                                            handleApply(
+                                                                job.id,
+                                                                job.employerId || job.employer
+                                                            )
+                                                        }
+                                                        className="flex-1 bg-brand-DEFAULT text-white py-2.5 rounded-xl font-bold hover:bg-brand-dark transition-colors cursor-pointer flex items-center justify-center gap-2 active:scale-95 shadow-md text-xs"
+                                                    >
+                                                        <AlertCircle className="w-4 h-4" />
+                                                        Apply Instantly
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => handleDecline(job.id)}
+                                                        className="px-4 py-2.5 bg-white text-slate-500 hover:bg-red-50 hover:text-red-700 rounded-xl font-bold border border-slate-200 text-xs"
+                                                    >
+                                                        Decline
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
+
+            {/* Job Details Modal overlay */}
+            {selectedJobDetailId && (
+                <JobDetailModal
+                    jobId={selectedJobDetailId}
+                    userToken={user?.token}
+                    onClose={() => {
+                        setSelectedJobDetailId(null);
+                        setSelectedDetailAppStatus(null);
+                    }}
+                    onApply={(jId, empId) => handleApply(jId, empId)}
+                    myApplicationStatus={selectedDetailAppStatus}
+                    onOpenContract={() => {
+                        setSelectedJobDetailId(null);
+                        if (dashboardData.activeContract?._id) {
+                            setActiveContractId(dashboardData.activeContract._id);
+                        }
+                    }}
+                />
+            )}
 
             {/* Conditional Contract Modal overlay */}
             {activeContractId && (
