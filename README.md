@@ -45,6 +45,10 @@ EverTried addresses this problem through a unified platform where:
 - Hyperlocal job discovery
 - Real-time job feed
 - Job application workflow
+- Dedicated "My Applications" tracking view
+- Multi-state application lifecycle tracking (Applied, Accepted/Hired, Rejected, In Progress, Completed)
+- Interactive job details modal viewer
+- Direct digital contract access for hired positions
 - Worker dashboard
 - Profile management
 
@@ -58,6 +62,10 @@ EverTried addresses this problem through a unified platform where:
 - Worker discovery
 - Worker-job matching
 - Job application management
+- Rich applicant cards with worker skills, experience, ratings, and wage expectations
+- Interactive applicant review (Accept/Hire and Reject actions with live feedback states)
+- Real-time applicant updates and automated contract generation
+- Contract viewing for hired workers
 - Employer dashboard
 
 ### Platform Features
@@ -71,6 +79,10 @@ EverTried addresses this problem through a unified platform where:
 - Notification unread count badge and read/unread status management
 - Offline notification persistence
 - Job lifecycle notifications (JOB_CREATED, JOB_APPLICATION, APPLICATION_ACCEPTED, APPLICATION_REJECTED, JOB_STARTED, JOB_COMPLETED)
+- Reusable `JobDetailModal` component for comprehensive job inspection
+- Protected job details retrieval (`GET /api/jobs/:id`)
+- Real-time dashboard state refresh on Socket.IO notification and application events
+- Live slot progress tracking (`X / Y slots filled`)
 - Worker assignment tracking
 - Digital signatures
 - Contract viewing
@@ -144,24 +156,24 @@ EverTried provides dedicated workflows for different platform users.
 
 Workers can:
 
-- Manage their profile
-- View skills and experience
-- Discover jobs
-- Apply for opportunities
-- Track applications
-- View assignments
+- Manage their profile, skills, and experience
+- Discover nearby job opportunities in real time
+- Apply for jobs with instant confirmation
+- Track submitted applications with clear lifecycle statuses (Applied, Accepted/Hired, Rejected, In Progress, Completed)
+- Inspect full job specifications in a dedicated modal overlay
+- Access and review legal digital contracts when hired
 - Receive real-time persistent notifications
 
 ### Employer Dashboard
 
 Employers can:
 
-- Manage their profile
-- Post jobs
-- Define job requirements
-- Discover workers
-- Review applications
-- Manage hiring workflows
+- Manage their profile and post live jobs
+- Define job requirements, worker capacity, and pay rates
+- Monitor slot filling progress in real time
+- Inspect rich applicant profiles with skills, experience, ratings, and wage expectations
+- Accept/Hire or Reject applicants with instant UI feedback and action processing states
+- Access and review generated digital contracts for hired workers
 - Receive applicant notifications in real time
 
 ### Coordinator Dashboard
@@ -299,6 +311,14 @@ The core EverTried platform is operational.
 - Coordinator dashboard
 - Job posting workflow
 - Job application workflow
+- Dedicated worker application tracking tab
+- Multi-state application lifecycle tracking (Applied, Accepted/Hired, Rejected, In Progress, Completed)
+- Rich employer applicant cards (worker skills, experience, ratings, wage expectations)
+- Employer Accept/Hire and Reject action controls with loading/disabled states
+- Digital contract access for hired workers
+- Reusable `JobDetailModal` component
+- Protected single job endpoint (`GET /api/jobs/:id`)
+- Real-time dashboard data refresh on Socket.IO notification/application events
 - Worker assignment workflow
 - AI voice profiling
 - Gemini skill extraction
@@ -316,20 +336,26 @@ The core EverTried platform is operational.
 
 ### Recent Development
 
+#### October 2026
+
+- Added a dedicated **My Applications** tab on the Worker Dashboard with multi-state tracking (`Applied`, `Accepted & Hired`, `Rejected`, `In Progress`, `Completed`).
+- Enhanced Employer Dashboard applicant cards to display worker skills, experience history, primary skill, ratings, and wage expectations.
+- Added Accept/Hire and Reject applicant management actions with loading, disabled, and feedback states.
+- Integrated digital contract access for hired workers directly from worker and employer dashboards.
+- Created reusable `JobDetailModal.jsx` component for inspecting full job specifications (pay, slot fill progress, required skills, location, employer details, and application status).
+- Added protected `GET /api/jobs/:id` endpoint for secure job specification retrieval.
+- Connected Socket.IO events (`worker_applied`, `job_confirmation`, `notification:new`) to automatically refresh dashboard states in real time when application statuses change.
+- Verified end-to-end job workflow through automated smoke testing (job creation, application, employer review, hiring, contract generation, and notification persistence).
+
 #### September 2026
 
-- Implemented real-time persistent notifications
-- Added MongoDB notification persistence
-- Added user-specific Socket.IO notification delivery
-- Integrated notifications with job lifecycle events
-- Added notification read/unread controls
-- Verified notification system through automated end-to-end smoke tests
-- Improved Google authentication workflow.
-- Configured Firebase authorized domains for production.
-- Verified Google Sign-In in the deployed environment.
-- Verified authentication persistence after page refresh.
-- Improved worker AI voice profiling.
-- Improved Gemini skill extraction and validation.
+- Implemented real-time persistent notifications with MongoDB storage and Socket.IO user room delivery.
+- Integrated notifications with job lifecycle events (`JOB_CREATED`, `JOB_APPLICATION`, `APPLICATION_ACCEPTED`, `APPLICATION_REJECTED`, `JOB_STARTED`, `JOB_COMPLETED`).
+- Added notification read/unread controls and unread count badge.
+- Verified notification system through automated end-to-end smoke tests.
+- Improved Google authentication workflow and configured Firebase authorized domains for production.
+- Verified Google Sign-In and authentication persistence across page refreshes in the deployed environment.
+- Improved worker AI voice profiling with Gemini skill extraction and validation.
 - Continued improvements to worker and employer workflows.
 
 ---
@@ -339,10 +365,11 @@ The core EverTried platform is operational.
 - Frontend ESLint: Passed
 - Frontend production build: Passed
 - Backend syntax check: Passed
-- Notification API tests: Passed
-- Notification persistence tests: Passed
-- Socket.IO delivery tests: Passed
-- Authorization tests: Passed
+- Automated notification smoke tests: Passed
+- Automated job workflow smoke test: Passed (job creation, application, employer review, hiring, contract access, and notification persistence)
+- Notification API & persistence tests: Passed
+- Socket.IO delivery & room isolation tests: Passed
+- Authorization & data isolation tests: Passed
 - Offline notification persistence tests: Passed
 - Job lifecycle notification tests: Passed
 - Frontend notification verification: Passed
