@@ -20,6 +20,12 @@ const generateContract = async (req, res) => {
             return res.status(404).json({ message: 'Validation failed, missing entities' });
         }
 
+        // Return existing contract if already generated for this job and worker
+        const existingContract = await Contract.findOne({ jobId, workerId });
+        if (existingContract) {
+            return res.json(existingContract);
+        }
+
         // Generate unique hash ID for the contract
         const uniqueContractId = crypto.randomBytes(8).toString('hex').toUpperCase();
 

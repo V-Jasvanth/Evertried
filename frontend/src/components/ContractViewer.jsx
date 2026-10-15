@@ -1,53 +1,101 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { FileText, CheckCircle, ShieldCheck } from 'lucide-react';
+import { FileText, CheckCircle, ShieldCheck, AlertCircle, RefreshCw, X } from 'lucide-react';
 
 const ContractViewer = ({ contractId, onClose }) => {
     const { user } = useContext(AuthContext);
     const [contract, setContract] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [signing, setSigning] = useState(false);
+    const [signStatus, setSignStatus] = useState(null);
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+
+    const fetchContract = useCallback(async () => {
+        if (!contractId || !user?.token) return;
+        try {
+            setLoading(true);
+            setError(null);
+            const config = { headers: { Authorization: `Bearer ${user.token}` } };
+            const { data } = await axios.get(`${API_URL}/api/contract/${contractId}`, config);
+            setContract(data);
+        } catch (err) {
+            console.error("Error fetching contract:", err);
+            if (err.response?.status === 401) {
+                setError("Your session has expired. Please sign in again.");
+            } else {
+                setError("Unable to load the digital contract. Please check your network connection.");
+            }
+        } finally {
+            setLoading(false);
+        }
+    }, [contractId, user?.token, API_URL]);
 
     useEffect(() => {
-        if (!contractId) return;
-        const fetchContract = async () => {
-            try {
-                const config = { headers: { Authorization: `Bearer ${user.token}` } };
-                const { data } = await axios.get(`${API_URL}/api/contract/${contractId}`, config);
-                setContract(data);
-            } catch (err) {
-                console.error("Error fetching contract:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchContract();
-    }, [contractId, user, API_URL]);
+    }, [fetchContract]);
 
     const handleSign = async () => {
         setSigning(true);
+        setSignStatus(null);
         try {
             const config = { headers: { Authorization: `Bearer ${user.token}` } };
             const { data } = await axios.post(`${API_URL}/api/contract/${contractId}/sign`, {}, config);
             setContract(data);
-            alert("Digital Signature Applied Successfully!");
+            setSignStatus({ type: 'success', message: 'Digital Signature applied successfully!' });
         } catch (err) {
             console.error("Signing failed", err);
-            alert("Failed to sign contract. Ensure you have generated your profile signature first.");
+            const msg = err.response?.data?.message || "Failed to sign contract. Please ensure you have generated your profile signature in your profile first.";
+            setSignStatus({ type: 'error', message: msg });
+        } finally {
+            setSigning(false);
         }
-        setSigning(false);
     };
 
-    if (loading) return (
-        <div className="p-8 text-center">
-            <div className="w-8 h-8 rounded-full border-4 border-brand-DEFAULT border-t-transparent animate-spin mx-auto"></div>
-        </div>
-    );
+    if (loading) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-white max-w-sm w-full rounded-3xl p-8 shadow-2xl text-center">
+                    <div className="w-10 h-10 rounded-full border-4 border-brand-DEFAULT border-t-transparent animate-spin mx-auto mb-4"></div>
+                    <p className="font-bold text-slate-800 text-sm">Loading digital contract...</p>
+                </div>
+            </div>
+        );
+    }
 
-    if (!contract) return null;
+    if (error || !contract) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-white max-w-md w-full rounded-3xl p-8 shadow-2xl text-center border border-slate-200">
+                    <div className="w-12 h-12 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-100">
+                        <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <h3 className="font-black text-slate-900 text-lg mb-2">Contract Unavailable</h3>
+                    <p className="text-slate-600 text-sm mb-6 leading-relaxed">
+                        {error || "Could not retrieve contract details at this time."}
+                    </p>
+                    <div className="flex gap-3 justify-center">
+                        {onClose && (
+                            <button
+                                onClick={onClose}
+                                className="px-5 py-2.5 bg-slate-100 text-slate-700 font-bold text-sm rounded-xl hover:bg-slate-200 transition-colors"
+                            >
+                                Close
+                            </button>
+                        )}
+                        <button
+                            onClick={fetchContract}
+                            className="px-5 py-2.5 bg-brand-DEFAULT text-white font-bold text-sm rounded-xl hover:bg-brand-dark transition-all flex items-center gap-2 shadow-md active:scale-95"
+                        >
+                            <RefreshCw className="w-4 h-4" /> Try Again
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     const isWorker = user.role === 'worker';
     const isEmployer = user.role === 'employer';
@@ -139,6 +187,31 @@ const ContractViewer = ({ contractId, onClose }) => {
                         )}
                     </div>
                 </div>
+
+                {/* Sign Status Banner */}
+                {signStatus && (
+                    <div className={`mx-6 sm:mx-8 mb-3 p-3.5 rounded-2xl border text-xs sm:text-sm font-bold flex items-center justify-between gap-3 ${
+                        signStatus.type === 'success'
+                            ? 'bg-green-50 text-green-800 border-green-200'
+                            : 'bg-red-50 text-red-800 border-red-200'
+                    }`}>
+                        <div className="flex items-center gap-2">
+                            {signStatus.type === 'success' ? (
+                                <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                            ) : (
+                                <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                            )}
+                            <span>{signStatus.message}</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setSignStatus(null)}
+                            className="p-1 hover:bg-black/5 rounded-lg text-slate-500 transition-colors"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
 
                 {/* Footer */}
                 <div className="bg-slate-50 border-t border-slate-200 p-6 flex justify-between items-center">

@@ -1,35 +1,41 @@
-import { useState, useEffect } from 'react';
-import { X, MapPin, DollarSign, Users, Award, Calendar, CheckCircle, AlertCircle, FileText, Star, Briefcase } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, MapPin, DollarSign, Users, Award, Calendar, CheckCircle, AlertCircle, FileText, Star, Briefcase, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 
 const JobDetailModal = ({ jobId, userToken, onClose, onApply, myApplicationStatus, onOpenContract }) => {
     const [job, setJob] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [isApplying, setIsApplying] = useState(false);
 
     const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
 
-    useEffect(() => {
+    const fetchJob = useCallback(async () => {
         if (!jobId) return;
 
-        const fetchJob = async () => {
-            try {
-                setLoading(true);
-                const config = {
-                    headers: { Authorization: `Bearer ${userToken}` }
-                };
-                const res = await axios.get(`${API_URL}/api/jobs/${jobId}`, config);
-                setJob(res.data);
-            } catch (err) {
-                console.error('Error fetching job detail:', err);
-                setError('Failed to load job details.');
-            } finally {
-                setLoading(false);
+        try {
+            setLoading(true);
+            setError('');
+            const config = {
+                headers: { Authorization: `Bearer ${userToken}` }
+            };
+            const res = await axios.get(`${API_URL}/api/jobs/${jobId}`, config);
+            setJob(res.data);
+        } catch (err) {
+            console.error('Error fetching job detail:', err);
+            if (err.response?.status === 401) {
+                setError('Your session has expired. Please sign in again.');
+            } else {
+                setError('Failed to load job details. Please check your network connection.');
             }
-        };
-
-        fetchJob();
+        } finally {
+            setLoading(false);
+        }
     }, [jobId, userToken, API_URL]);
+
+    useEffect(() => {
+        fetchJob();
+    }, [fetchJob]);
 
     if (!jobId) return null;
 
@@ -100,8 +106,18 @@ const JobDetailModal = ({ jobId, userToken, onClose, onApply, myApplicationStatu
                             Fetching job information...
                         </div>
                     ) : error ? (
-                        <div className="p-4 bg-red-50 text-red-700 rounded-2xl border border-red-200 text-sm font-bold flex items-center gap-2">
-                            <AlertCircle className="w-5 h-5 text-red-500" /> {error}
+                        <div className="p-5 bg-red-50 text-red-700 rounded-2xl border border-red-200 text-sm font-bold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                                <span>{error}</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={fetchJob}
+                                className="px-3.5 py-1.5 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-colors flex items-center gap-1.5 shadow-sm active:scale-95 self-end sm:self-auto"
+                            >
+                                <RefreshCw className="w-3.5 h-3.5" /> Retry
+                            </button>
                         </div>
                     ) : (
                         <>
@@ -218,19 +234,36 @@ const JobDetailModal = ({ jobId, userToken, onClose, onApply, myApplicationStatu
 
                                 {onApply && !myApplicationStatus && (
                                     <button
-                                        onClick={() => {
-                                            onApply(job._id, job.employer?._id || job.employer);
-                                            onClose();
+                                        onClick={async () => {
+                                            if (isApplying || isFull) return;
+                                            setIsApplying(true);
+                                            try {
+                                                await onApply(job._id, job.employer?._id || job.employer);
+                                                onClose();
+                                            } catch (err) {
+                                                console.error('Apply error:', err);
+                                            } finally {
+                                                setIsApplying(false);
+                                            }
                                         }}
-                                        disabled={isFull}
+                                        disabled={isFull || isApplying}
                                         className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white shadow-md transition-all flex items-center gap-2 ${
-                                            isFull
+                                            isFull || isApplying
                                                 ? 'bg-slate-300 cursor-not-allowed shadow-none'
                                                 : 'bg-brand-DEFAULT hover:bg-brand-dark active:scale-95 shadow-brand-DEFAULT/20'
                                         }`}
                                     >
-                                        <CheckCircle className="w-4 h-4" />
-                                        {isFull ? 'Positions Full' : 'Apply Now'}
+                                        {isApplying ? (
+                                            <>
+                                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                Applying...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle className="w-4 h-4" />
+                                                {isFull ? 'Positions Full' : 'Apply Now'}
+                                            </>
+                                        )}
                                     </button>
                                 )}
                             </div>

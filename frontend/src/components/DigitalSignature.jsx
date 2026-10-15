@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { PenTool, CheckCircle, ShieldCheck } from 'lucide-react';
+import { PenTool, CheckCircle, ShieldCheck, AlertCircle } from 'lucide-react';
 
 const DigitalSignature = () => {
     const { user } = useContext(AuthContext);
@@ -9,8 +9,9 @@ const DigitalSignature = () => {
     const [signature, setSignature] = useState(null);
     const [loading, setLoading] = useState(false);
     const [preview, setPreview] = useState(false);
+    const [error, setError] = useState(null);
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
 
     useEffect(() => {
         const fetchSignature = async () => {
@@ -29,22 +30,29 @@ const DigitalSignature = () => {
 
     const handlePreview = (e) => {
         e.preventDefault();
-        if (fullName.trim().length < 3) return alert('Please enter your full legal name');
+        setError(null);
+        if (fullName.trim().length < 3) {
+            setError('Please enter your full legal name (at least 3 characters).');
+            return;
+        }
         setPreview(true);
     };
 
     const handleSavePrimary = async () => {
         setLoading(true);
+        setError(null);
         try {
             const config = { headers: { Authorization: `Bearer ${user.token}` } };
             const { data } = await axios.post(`${API_URL}/api/user/create-signature`, { fullName }, config);
             setSignature(data.signature);
             setPreview(false);
-        } catch (error) {
-            console.error('Failed to create signature', error);
-            alert('Failed to generate signature');
+        } catch (err) {
+            console.error('Failed to create signature', err);
+            const msg = err.response?.data?.message || 'Failed to generate signature. Please try again.';
+            setError(msg);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     if (signature) {
@@ -71,6 +79,13 @@ const DigitalSignature = () => {
                 <PenTool className="w-5 h-5" />
                 <h3 className="font-bold">Digital Signature</h3>
             </div>
+
+            {error && (
+                <div className="mb-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded-xl text-xs font-bold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{error}</span>
+                </div>
+            )}
             
             {!preview ? (
                 <form onSubmit={handlePreview}>
