@@ -11,9 +11,7 @@ The platform aims to simplify local hiring by helping employers discover suitabl
 ## Live Demo
 
 [Visit EverTried](https://evertried-1.onrender.com)
-
 ---
-
 ## Overview
 
 Finding reliable skilled workers quickly can be difficult for local employers, while skilled workers often struggle to discover suitable opportunities near them.
